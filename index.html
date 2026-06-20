@@ -171,11 +171,14 @@ function computeRanks(vis){
   var rmap={};
   vis.forEach(function(d){rmap[d.n]=new Array(12).fill(0);});
   for(var yi=0;yi<12;yi++){
-    var sc=vis.map(function(d){return{n:d.n,v:d.yv[yi]};}).sort(function(a,b){return b.v-a.v;});
-    var rk=0;
-    sc.forEach(function(s){
-      if(s.v>0)rk++;
-      rmap[s.n][yi]=s.v>0?rk:0;
+    // Sort all names: those with data first (desc), those without at the end
+    var sc=vis.map(function(d){return{n:d.n,v:d.yv[yi]};})
+              .sort(function(a,b){
+                if((a.v>0)===(b.v>0))return b.v-a.v;
+                return a.v>0?-1:1;
+              });
+    sc.forEach(function(s,ri){
+      rmap[s.n][yi]=ri+1; // always 1..N, no gaps
     });
   }
   return rmap;
@@ -184,7 +187,6 @@ function computeRanks(vis){
 function bzPath(rr,N){
   var d='',prev=null;
   rr.forEach(function(r,i){
-    if(r===0){prev=null;return;}
     var x=xP(i).toFixed(1),y=yP(r,N).toFixed(1);
     if(!prev){d+='M'+x+','+y;}
     else{var cx=((+prev[0]+(+x))/2).toFixed(1);d+=' C'+cx+','+prev[1]+' '+cx+','+y+' '+x+','+y;}
@@ -241,15 +243,21 @@ function drawBump(){
     var r0=rr[0],r11=rr[11];
     s+='<g data-didx="'+didx+'">';
     if(path)s+='<path d="'+path+'" fill="none" stroke="'+c+'" stroke-width="'+sw+'" opacity="'+op+'" stroke-linecap="round" stroke-linejoin="round"/>';
-    // hide dots for large N unless selected/hovered
+    // dots: filled if has data, hollow if no data that year
     if(N<=60||isSel||hov===didx){
       rr.forEach(function(r,i){
-        if(!r)return;
-        s+='<circle cx="'+xP(i).toFixed(1)+'" cy="'+yP(r,N).toFixed(1)+'" r="'+(isSel||hov===didx?dotRSel:dotR)+'" fill="'+c+'" opacity="'+op+'"/>';
+        var hasData=d.yv[i]>0;
+        var dr=isSel||hov===didx?dotRSel:dotR;
+        if(hasData){
+          s+='<circle cx="'+xP(i).toFixed(1)+'" cy="'+yP(r,N).toFixed(1)+'" r="'+dr+'" fill="'+c+'" opacity="'+op+'"/>';
+        } else if(N<=40||isSel||hov===didx){
+          s+='<circle cx="'+xP(i).toFixed(1)+'" cy="'+yP(r,N).toFixed(1)+'" r="'+dr+'" fill="none" stroke="'+c+'" stroke-width="1" opacity="'+(+op*0.4).toFixed(2)+'"/>';
+        }
       });
     }
-    if(r0>0)s+='<text x="'+(ML-8)+'" y="'+(yP(r0,N)+4).toFixed(1)+'" text-anchor="end" font-size="'+fs+'" font-weight="500" fill="'+c+'" opacity="'+op+'">'+d.n+'</text>';
-    if(r11>0&&MR>=50)s+='<text x="'+(ML+CW+8)+'" y="'+(yP(r11,N)+4).toFixed(1)+'" text-anchor="start" font-size="'+fs+'" font-weight="500" fill="'+c+'" opacity="'+op+'">'+(isSel?'✓ ':'')+d.n+'</text>';
+    // labels always shown (all names have ranks for all years now)
+    s+='<text x="'+(ML-8)+'" y="'+(yP(rr[0],N)+4).toFixed(1)+'" text-anchor="end" font-size="'+fs+'" font-weight="500" fill="'+c+'" opacity="'+op+'">'+d.n+'</text>';
+    if(MR>=50)s+='<text x="'+(ML+CW+8)+'" y="'+(yP(rr[11],N)+4).toFixed(1)+'" text-anchor="start" font-size="'+fs+'" font-weight="500" fill="'+c+'" opacity="'+op+'">'+(isSel?'✓ ':'')+d.n+'</text>';
     s+='</g>';
   });
   s+='</svg>';
