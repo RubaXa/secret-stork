@@ -56,6 +56,37 @@ h1{font-size:17px;font-weight:500;display:inline}
 .cmp-legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .cleg{font-size:11px;color:var(--t2);display:flex;align-items:center;gap:4px}
 .cleg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+/* ── mobile ─────────────────────────────── */
+@media(max-width:640px){
+  html,body{height:auto;overflow-y:auto;overflow-x:hidden}
+  .hdr{padding:10px 12px}
+  .hdr-top{flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  h1{font-size:15px}
+  .sub{display:none}
+  .vc{font-size:12px;white-space:nowrap}
+  .flt{gap:10px}
+  .fg{min-width:0;width:100%}
+  #srch{width:100%;min-width:0}
+  #tsel{width:100%}
+  .main{overflow:visible;flex:none}
+  .bump-col{overflow:visible;padding:10px 4px 120px 10px}
+  /* right panel: hidden when empty, bottom sheet when has selections */
+  .sel-col{
+    position:fixed;bottom:0;left:0;right:0;
+    width:100%!important;
+    max-height:52vh;
+    border-left:none;
+    border-top:1px solid var(--cb);
+    border-radius:16px 16px 0 0;
+    box-shadow:0 -4px 24px rgba(0,0,0,.18);
+    z-index:200;
+    transition:transform .25s ease;
+  }
+  .sel-col.is-empty{transform:translateY(100%);pointer-events:none}
+  .sel-col-inner{padding:12px 14px}
+  .cw{height:180px}
+}
 </style>
 </head>
 <body>
@@ -168,9 +199,9 @@ function drawBump(){
   document.getElementById('vc').textContent=N;
   if(!N){document.getElementById('bumpWrap').innerHTML='<p style="padding:40px 0;color:var(--t3);text-align:center">Ничего не найдено — попробуйте изменить фильтры</p>';return;}
   SW=getSW();
-  // scale margins down on narrow screens
-  ML=SW<500?80:SW<700?100:120;
-  MR=SW<500?85:SW<700?105:125;
+  var isMobile=SW<500;
+  ML=isMobile?80:SW<700?100:120;
+  MR=isMobile?12:SW<700?105:125;
   CW=SW-ML-MR;
   var rowH=N<=20?24:N<=40?18:N<=70?14:10;
   CH=Math.max((N-1)*rowH,20);
@@ -178,7 +209,7 @@ function drawBump(){
   var rmap=computeRanks(vis);
   var hasSel=sel.size>0;
 
-  var s='<svg width="'+SW+'" height="'+SH+'" style="display:block;overflow:visible">';
+  var s='<svg viewBox="0 0 '+SW+' '+SH+'" preserveAspectRatio="none" style="display:block;width:100%;height:'+SH+'px;overflow:visible">';
 
   YRS.forEach(function(y,i){
     var x=xP(i).toFixed(1);
@@ -218,7 +249,7 @@ function drawBump(){
       });
     }
     if(r0>0)s+='<text x="'+(ML-8)+'" y="'+(yP(r0,N)+4).toFixed(1)+'" text-anchor="end" font-size="'+fs+'" font-weight="500" fill="'+c+'" opacity="'+op+'">'+d.n+'</text>';
-    if(r11>0)s+='<text x="'+(ML+CW+8)+'" y="'+(yP(r11,N)+4).toFixed(1)+'" text-anchor="start" font-size="'+fs+'" font-weight="500" fill="'+c+'" opacity="'+op+'">'+(isSel?'✓ ':'')+d.n+'</text>';
+    if(r11>0&&MR>=50)s+='<text x="'+(ML+CW+8)+'" y="'+(yP(r11,N)+4).toFixed(1)+'" text-anchor="start" font-size="'+fs+'" font-weight="500" fill="'+c+'" opacity="'+op+'">'+(isSel?'✓ ':'')+d.n+'</text>';
     s+='</g>';
   });
   s+='</svg>';
@@ -254,6 +285,7 @@ function clearSel(){sel.clear();hov=-1;drawBump();drawComparison();}
 
 function drawComparison(){
   var se=document.getElementById('selEmpty'),sp=document.getElementById('selPanel');
+  document.querySelector('.sel-col').classList.toggle('is-empty',!sel.size);
   if(!sel.size){se.style.display='';sp.style.display='none';if(cmpChart){cmpChart.destroy();cmpChart=null;}return;}
   se.style.display='none';sp.style.display='';
   var chips='';
@@ -320,6 +352,7 @@ function initSliders(){
   });
 }
 
+document.querySelector('.sel-col').classList.add('is-empty');
 drawBump();
 initSliders();
 
