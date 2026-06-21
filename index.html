@@ -1574,7 +1574,6 @@ function renderAggregateItems(allVotes, penalty) {
       meta: state.names.find(n => n.name === name) || { name },
     }))
     .map(x => ({ ...x, score: x.avg - penalty * (x.meta?.popularity ?? 0.1) * RATINGS.length }))
-    .filter(x => x.avg >= 3)
     .sort((a, b) => b.score - a.score)
 
   if (!ranked.length) {
