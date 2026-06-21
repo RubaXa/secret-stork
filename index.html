@@ -864,9 +864,38 @@ async function renderVoting(spaceId) {
   if (!space) { toast('Голосование не найдено', 'error'); navigate('/'); return }
 
   state.space = space
+
+  // Load votes from IDB (local-first)
   state.votes = await dbGetVotes(spaceId)
+  L('voting', 'IDB votes=' + Object.keys(state.votes).length)
+
+  // Merge votes from Firestore — covers cross-device case where IDB is empty
+  try {
+    const fsSnap = await getDoc(doc(fbDb, 'spaces', spaceId, 'votes', state.user.uid))
+    if (fsSnap.exists()) {
+      const fsVotes = fsSnap.data().votes || {}
+      L('voting', 'Firestore votes=' + Object.keys(fsVotes).length)
+      let added = 0
+      for (const [name, score] of Object.entries(fsVotes)) {
+        if (!(name in state.votes)) {
+          state.votes[name] = score
+          await dbSaveVote(spaceId, name, score)
+          added++
+        }
+      }
+      if (added > 0) {
+        L('voting', 'merged ' + added + ' votes from Firestore')
+        // Update cached progress in space
+        const sp = await dbGetSpace(spaceId)
+        if (sp) { sp._progress = Object.keys(state.votes).length; await dbSaveSpace(sp) }
+      }
+    }
+  } catch (e) {
+    L('voting', 'Firestore votes sync error', e.message)
+  }
+
   state.skips = new Set()
-  state.queue = shuffle(state.names.map(n => n.name)) // new random order each session
+  state.queue = shuffle(state.names.map(n => n.name))
   renderVotingCard(spaceId)
 }
 
