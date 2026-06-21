@@ -109,7 +109,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .gender-note{font-size:11px;color:var(--t3);margin-bottom:20px}
 
 /* VOTING */
-.voting-view{display:flex;flex-direction:column;max-width:480px;margin:0 auto;width:100%;padding:14px 16px 20px;height:calc(100dvh - 56px);min-height:0}
+.voting-view{display:flex;flex-direction:column;max-width:480px;margin:0 auto;width:100%;padding:14px 16px calc(20px + env(safe-area-inset-bottom,0px));height:calc(100dvh - 56px);min-height:0;box-sizing:border-box}
 .voting-top{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-shrink:0}
 .progress-bar{flex:1;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden}
 .progress-fill{height:100%;border-radius:2px;background:linear-gradient(to right,var(--accent),var(--accent2));transition:width .3s ease}
@@ -119,15 +119,17 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .name-card{flex:1;border-radius:24px;padding:28px 24px 24px;display:flex;flex-direction:column;justify-content:flex-end;position:relative;overflow:hidden;min-height:0;color:white}
 .card-image{position:absolute;inset:0;background-size:cover;background-position:top center;-webkit-mask-image:linear-gradient(to bottom,black 40%,transparent 85%);mask-image:linear-gradient(to bottom,black 40%,transparent 85%);opacity:.72;filter:brightness(.85) saturate(.8)}
 .card-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 30%,rgba(0,0,0,.5) 100%)}
-.card-content{position:relative;z-index:1}
-.card-name{font-size:clamp(36px,8vw,56px);font-weight:900;line-height:1.05;margin-bottom:8px;text-shadow:0 2px 20px rgba(0,0,0,.7),0 1px 6px rgba(0,0,0,.5)}
-.card-meaning{font-size:16px;font-weight:500;opacity:.95;margin-bottom:6px;text-shadow:0 1px 10px rgba(0,0,0,.6)}
-.card-origin{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.04em;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.45);border-radius:20px;padding:2px 10px;margin-bottom:12px;line-height:1.5}
+.card-content{position:relative;z-index:1;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+.card-name{font-size:clamp(36px,8vw,56px);font-weight:900;line-height:1.05;margin-bottom:8px;text-shadow:0 1px 8px rgba(0,0,0,.75)}
+.card-meaning{font-size:16px;font-weight:500;opacity:.95;margin-bottom:6px}
+.card-origin{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.04em;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.45);border-radius:20px;padding:2px 10px;margin-bottom:12px;line-height:1.5;text-shadow:none}
 .card-divider{width:36px;height:2px;background:rgba(255,255,255,.3);border-radius:1px;margin-bottom:10px}
-.card-nicknames{font-size:13px;opacity:.8;margin-bottom:8px;text-shadow:0 1px 8px rgba(0,0,0,.5)}
-.card-fact{font-size:13px;font-style:italic;opacity:.7;line-height:1.5;text-shadow:0 1px 8px rgba(0,0,0,.5)}
-.card-skip{position:absolute;top:14px;right:14px;background:rgba(0,0,0,.25);border:none;border-radius:8px;color:rgba(255,255,255,.7);font-size:12px;padding:6px 11px;cursor:pointer;z-index:2;transition:all .15s}
-.card-skip:hover{background:rgba(0,0,0,.45);color:white}
+.card-nicknames{font-size:13px;opacity:.8;margin-bottom:8px}
+.card-fact{font-size:13px;font-style:italic;opacity:.7;line-height:1.5}
+.card-top-btns{position:absolute;top:14px;right:14px;display:flex;gap:6px;z-index:2}
+.card-top-btn{background:rgba(0,0,0,.25);border:none;border-radius:8px;color:rgba(255,255,255,.7);font-size:12px;padding:6px 11px;cursor:pointer;transition:all .15s}
+.card-top-btn:hover{background:rgba(0,0,0,.45);color:white}
+.card-top-btn:disabled{opacity:.3;cursor:not-allowed}
 .card-idx{position:absolute;top:14px;left:16px;font-size:11px;font-weight:700;color:rgba(255,255,255,.5);z-index:2;letter-spacing:.05em}
 @keyframes card-in{from{transform:translateY(16px) scale(.97)}to{transform:none}}
 @keyframes fly-left{
@@ -158,16 +160,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .card-next .card-overlay{opacity:.4}
 
 .rating-section{flex-shrink:0;margin-top:12px;position:relative;z-index:3}
-.rating-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px}
+.rating-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
 .r-btn{display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 4px;border-radius:14px;border:2px solid var(--border);background:var(--surface);cursor:pointer;transition:all .15s;outline:none}
 .r-btn:hover{border-color:var(--accent)}
 .r-btn.active{border-color:white;background:rgba(255,255,255,.1);transform:scale(1.04)}
 .r-emoji{font-size:22px;line-height:1}
 .r-lbl{font-size:9px;color:var(--t2);text-align:center;line-height:1.3;font-weight:500}
 .r-btn.active .r-lbl{color:rgba(255,255,255,.8)}
-.btn-next{width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;border-radius:12px;padding:15px;font-size:15px;font-weight:700;border:none;cursor:pointer;transition:all .15s}
-.btn-next:not(:disabled):hover{transform:translateY(-1px);box-shadow:0 4px 18px rgba(124,111,247,.4)}
-.btn-next:disabled{opacity:.25;cursor:not-allowed}
 
 /* DONE */
 .done-view{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;text-align:center;padding:32px;gap:18px;min-height:calc(100dvh - 56px)}
@@ -230,14 +229,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 @keyframes spin{to{transform:rotate(360deg)}}
 
 @media(max-width:480px){
-  .voting-view{padding:10px 12px 16px}
+  .voting-view{padding:10px 12px calc(16px + env(safe-area-inset-bottom,0px))}
   .name-card{border-radius:20px;padding:20px 18px 18px}
   .card-name{font-size:clamp(30px,9vw,44px)}
   .rating-grid{gap:5px}
   .r-btn{padding:9px 2px;border-radius:12px}
   .r-emoji{font-size:20px}
   .r-lbl{font-size:8px}
-  .btn-next{padding:13px}
 }
 </style>
 </head>
@@ -283,6 +281,7 @@ const state = {
   votes: {},       // { name: score } for current space (loaded per space)
   skips: new Set(), // names skipped this session
   queue: [],       // shuffled name order for current session
+  history: [],     // [{name, isVote, score}] for undo
   space: null,
   syncStatus: 'ok',
   pendingCount: 0,
@@ -920,7 +919,10 @@ function buildCardWrap(nameData, extraCls) {
       <div class="name-card" style="background:linear-gradient(145deg,${c1},${c2})">
         <div class="card-image" style="background-image:url('data/images/${encodeURIComponent(nameData.name)}.jpg')"></div>
         <div class="card-overlay"></div>
-        <button class="card-skip" data-action="skip">Пропустить</button>
+        <div class="card-top-btns">
+          <button class="card-top-btn card-back-btn" ${state.history.length ? '' : 'disabled'}>← Назад</button>
+          <button class="card-top-btn card-skip-btn">Пропустить</button>
+        </div>
         <div class="card-idx">#${idx + 1}</div>
         <div class="card-content">
           <div class="card-name">${esc(nameData.name)}</div>
@@ -967,7 +969,6 @@ function renderVotingCard(spaceId) {
               <span class="r-lbl">${r.label}</span>
             </button>`).join('')}
         </div>
-        <button class="btn-next" id="btn-next" disabled>Далее →</button>
       </div>
     </div>`)
 
@@ -977,37 +978,33 @@ function renderVotingCard(spaceId) {
 }
 
 function setupVotingHandlers(spaceId) {
-  const sel = { value: null }
   document.querySelectorAll('.r-btn').forEach(btn => {
-    btn.onclick = () => {
-      sel.value = +btn.dataset.score
-      document.querySelectorAll('.r-btn').forEach(b => b.classList.toggle('active', b === btn))
-      document.getElementById('btn-next').disabled = false
-    }
+    btn.onclick = () => advanceCard(spaceId, true, +btn.dataset.score)
   })
-  const skipBtn = document.querySelector('.card-current .card-skip')
-  if (skipBtn) skipBtn.onclick = () => advanceCard(spaceId, false, null, sel)
-  document.getElementById('btn-next').onclick = () => {
-    if (sel.value === null) return
-    advanceCard(spaceId, true, sel.value, sel)
+  const skipBtn = document.querySelector('.card-current .card-skip-btn')
+  if (skipBtn) skipBtn.onclick = () => advanceCard(spaceId, false, null)
+  const backBtn = document.querySelector('.card-current .card-back-btn')
+  if (backBtn) {
+    backBtn.disabled = !state.history.length
+    backBtn.onclick = () => goBack(spaceId)
   }
 }
 
-async function advanceCard(spaceId, isVote, score, sel) {
+async function advanceCard(spaceId, isVote, score) {
   // Lock UI to prevent double-fire
-  const nextBtn = document.getElementById('btn-next')
-  if (nextBtn) nextBtn.onclick = null
   document.querySelectorAll('.r-btn').forEach(b => { b.onclick = null; b.style.pointerEvents = 'none' })
-  const skipBtn = document.querySelector('.card-current .card-skip')
+  const skipBtn = document.querySelector('.card-current .card-skip-btn')
   if (skipBtn) { skipBtn.onclick = null; skipBtn.disabled = true }
+  const backBtn = document.querySelector('.card-current .card-back-btn')
+  if (backBtn) backBtn.onclick = null
 
   const queue = getVotingQueue()
   const current = queue[0]
   if (!current) return
+  state.history.push({ name: current.name, isVote, score })
   const dir = isVote ? (score <= 2 ? 'left' : score >= 4 ? 'right' : 'left') : 'up'
   const deck = document.getElementById('card-deck')
 
-  // Fly current out, rise next card simultaneously — no re-render gap
   await flyAndAdvance(dir, deck)
 
   if (isVote) {
@@ -1035,14 +1032,17 @@ async function advanceCard(spaceId, isVote, score, sel) {
     deck.insertBefore(tmp.firstElementChild, deck.firstChild)
   }
 
-  // Reset rating buttons
-  document.querySelectorAll('.r-btn').forEach(b => {
-    b.classList.remove('active')
-    b.style.pointerEvents = ''
-  })
-  if (nextBtn) nextBtn.disabled = true
-
+  document.querySelectorAll('.r-btn').forEach(b => { b.style.pointerEvents = '' })
   setupVotingHandlers(spaceId)
+}
+
+function goBack(spaceId) {
+  if (!state.history.length) return
+  const last = state.history.pop()
+  if (last.isVote) delete state.votes[last.name]
+  else state.skips.delete(last.name)
+  state.queue = [last.name, ...state.queue.filter(n => n !== last.name)]
+  renderVotingCard(spaceId)
 }
 
 function flyAndAdvance(dir, deck) {
