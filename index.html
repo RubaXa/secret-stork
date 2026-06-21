@@ -163,7 +163,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .card-next .card-overlay{opacity:.4}
 
 .rating-section{flex-shrink:0;margin-top:12px;position:relative;z-index:3}
-.rating-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.rating-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
 .r-btn{display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 4px;border-radius:14px;border:2px solid var(--border);background:var(--surface);cursor:pointer;transition:all .15s;outline:none}
 .r-btn:hover{border-color:var(--accent)}
 .r-btn.active{border-color:white;background:rgba(255,255,255,.1);transform:scale(1.04)}
@@ -269,12 +269,13 @@ const FB_CONFIG = {
 }
 
 const RATINGS = [
-  { score: 1, emoji: '💀', label: 'Никогда' },
-  { score: 2, emoji: '👎', label: 'Не нравится' },
-  { score: 3, emoji: '👍', label: 'Нравится' },
-  { score: 4, emoji: '❤️', label: 'Обожаю' },
+  { score: 1, emoji: '❌', label: 'Точно нет' },
+  { score: 2, emoji: '👎', label: 'Скорее нет' },
+  { score: 3, emoji: '😐', label: 'Нейтрально' },
+  { score: 4, emoji: '👍', label: 'Нравится' },
+  { score: 5, emoji: '❤️', label: 'Обожаю' },
 ]
-const RATING_COLORS = ['#c0392b','#e67e22','#4a90e2','#e91e63']
+const RATING_COLORS = ['#c0392b','#e67e22','#9e9e9e','#4a90e2','#e91e63']
 
 function clampScore(s) { return Math.min(Math.max(Math.round(s), 1), RATINGS.length) }
 
@@ -1059,7 +1060,7 @@ async function advanceCard(spaceId, score) {
   const current = queue[0]
   if (!current) return
   state.history.push({ name: current.name, isVote: true, score })
-  const dir = score <= 2 ? 'left' : 'right'
+  const dir = score <= 2 ? 'left' : score === 3 ? 'up' : 'right'
   const deck = document.getElementById('card-deck')
 
   await flyAndAdvance(dir, deck)
@@ -1234,7 +1235,7 @@ async function renderHistory(spaceId) {
     .sort((a, b) => b.score - a.score)
 
   const items = voted.map(n => {
-    const r = RATINGS[n.score - 1]
+    const r = RATINGS[clampScore(n.score) - 1]
     return `
       <div class="hist-item" data-name="${esc(n.name)}">
         <div class="hist-name">${esc(n.name)}</div>
@@ -1574,7 +1575,7 @@ function renderBreakdown(allVotes) {
         ${sorted.map(([name, s]) => `
           <div class="bd-row">
             <span style="font-size:14px;font-weight:500">${esc(name)}</span>
-            <span style="font-size:18px">${RATINGS[s-1].emoji}</span>
+            <span style="font-size:18px">${RATINGS[clampScore(s)-1].emoji}</span>
           </div>`).join('')}
         ${!sorted.length ? '<div style="font-size:13px;color:var(--t2)">Нет понравившихся имён</div>' : ''}
       </div>`
