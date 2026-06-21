@@ -126,6 +126,32 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .card-skip{position:absolute;top:14px;right:14px;background:rgba(0,0,0,.25);border:none;border-radius:8px;color:rgba(255,255,255,.7);font-size:12px;padding:6px 11px;cursor:pointer;z-index:2;transition:all .15s}
 .card-skip:hover{background:rgba(0,0,0,.45);color:white}
 .card-idx{position:absolute;top:14px;left:16px;font-size:11px;font-weight:700;color:rgba(255,255,255,.5);z-index:2;letter-spacing:.05em}
+@keyframes card-in{from{transform:translateY(22px) scale(.95);opacity:0}to{transform:none;opacity:1}}
+@keyframes fly-left{
+  0%  {transform:rotate(0deg) translateX(0)}
+  100%{transform:rotate(-28deg) translateX(-150%);opacity:0}
+}
+@keyframes fly-right{
+  0%  {transform:rotate(0deg) translateX(0)}
+  100%{transform:rotate(28deg) translateX(150%);opacity:0}
+}
+@keyframes fly-skip{
+  0%  {transform:rotate(0deg) translateY(0)}
+  30% {transform:rotate(-6deg) translateY(-15%)}
+  100%{transform:rotate(-18deg) translateX(-60%) translateY(-90%);opacity:0}
+}
+.name-card{animation:card-in .3s cubic-bezier(.22,.68,0,1.2);transform-origin:50% 85%}
+.name-card.fly-left{animation:fly-left .32s cubic-bezier(.4,0,1,1) forwards!important}
+.name-card.fly-right{animation:fly-right .32s cubic-bezier(.4,0,1,1) forwards!important}
+.name-card.fly-up{animation:fly-skip .32s cubic-bezier(.4,0,1,1) forwards!important}
+.home-tabs{display:flex;background:var(--surface2);border-radius:12px;padding:3px;margin-bottom:20px}
+.home-tab{flex:1;padding:9px 4px;border-radius:9px;border:none;background:transparent;color:var(--t2);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
+.home-tab.active{background:var(--surface);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.card-deck{flex:1;position:relative;min-height:0;padding-bottom:14px}
+.card-wrap{position:absolute;top:0;left:0;right:0;bottom:14px;overflow:hidden;border-radius:24px;display:flex;flex-direction:column}
+.card-ghost{position:absolute;border-radius:22px;pointer-events:none}
+.card-ghost-1{top:4px;left:2.5%;right:2.5%;bottom:-12px;transform:rotate(-2deg)}
+.card-ghost-2{top:8px;left:5%;right:5%;bottom:-20px;transform:rotate(2.5deg)}
 
 .rating-section{flex-shrink:0;margin-top:12px}
 .rating-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px}
@@ -252,11 +278,13 @@ const state = {
   names: [],       // enriched name objects
   votes: {},       // { name: score } for current space (loaded per space)
   skips: new Set(), // names skipped this session
+  queue: [],       // shuffled name order for current session
   space: null,
   syncStatus: 'ok',
   pendingCount: 0,
   draining: false,
   unsubWatcher: null,
+  homeTab: 'participating', // 'participating' | 'mine'
 }
 
 // ─── FIREBASE ─────────────────────────────────────────────────────────────────
@@ -347,7 +375,7 @@ async function loadNames() {
 
 // ─── OUTBOX SYNC ─────────────────────────────────────────────────────────────
 async function drainOutbox() {
-  if (!state.user || state.draining) return
+  if (!state.user || state.draining || window._blockSync) return
   state.draining = true
   try {
     const db = await getDB()
@@ -536,13 +564,8 @@ function renderLogin() {
 }
 
 // ─── VIEW: HOME ───────────────────────────────────────────────────────────────
-async function renderHome() {
-  const spaces = await dbGetMySpaces(state.user.uid)
-  const avatar = state.user?.photoURL
-    ? `<img src="${state.user.photoURL}" alt="">`
-    : initials(state.user?.displayName)
-
-  const spaceCards = spaces.length ? spaces.map(s => `
+function spaceCardHtml(s, uid) {
+  return `
     <div class="space-card" data-nav="/space/${s.id}">
       <div>
         <div class="space-card-name">${esc(s.title)}</div>
@@ -550,15 +573,32 @@ async function renderHome() {
           <span class="status-pill ${s.status === 'active' ? 'status-active' : 'status-closed'}">
             ${s.status === 'active' ? '● Открыт' : '○ Закрыт'}
           </span>
-          ${s.creatorUid === state.user.uid ? '<span>Создатель</span>' : '<span>Участник</span>'}
+          ${s.creatorUid === uid ? '<span>Создатель</span>' : '<span>Участник</span>'}
+          ${s._progress ? `<span>${s._progress} оценено</span>` : ''}
         </div>
       </div>
       <span class="space-chevron">›</span>
-    </div>`).join('') : `
-    <div class="empty-state">
-      <div class="empty-icon">🎴</div>
-      <p class="empty-text">Нет активных сессий.<br>Создайте свою или попросите<br>партнёра прислать ссылку.</p>
     </div>`
+}
+
+async function renderHome() {
+  const allSpaces = await dbGetMySpaces(state.user.uid)
+  const uid = state.user.uid
+  const mySpaces = allSpaces.filter(s => s.creatorUid === uid)
+  const joinedSpaces = allSpaces.filter(s => s.creatorUid !== uid)
+  const avatar = state.user?.photoURL
+    ? `<img src="${state.user.photoURL}" alt="">`
+    : initials(state.user?.displayName)
+
+  const tab = state.homeTab
+  const shown = tab === 'mine' ? mySpaces : joinedSpaces
+  const emptyText = tab === 'mine'
+    ? 'Вы ещё не создавали сессий.<br>Нажмите «Создать Space» выше.'
+    : 'Вас ещё не пригласили.<br>Попросите партнёра прислать ссылку.'
+
+  const spaceCards = shown.length
+    ? shown.map(s => spaceCardHtml(s, uid)).join('')
+    : `<div class="empty-state"><div class="empty-icon">🎴</div><p class="empty-text">${emptyText}</p></div>`
 
   mount(`
     <nav class="nav">
@@ -576,13 +616,26 @@ async function renderHome() {
         </div>
         <div class="home-create-icon">🎴</div>
       </button>
-      <div class="section-title">Мои сессии</div>
+      <div class="home-tabs">
+        <button class="home-tab ${tab === 'participating' ? 'active' : ''}" data-tab="participating">
+          Участвую${joinedSpaces.length ? ` (${joinedSpaces.length})` : ''}
+        </button>
+        <button class="home-tab ${tab === 'mine' ? 'active' : ''}" data-tab="mine">
+          Мои Space${mySpaces.length ? ` (${mySpaces.length})` : ''}
+        </button>
+      </div>
       <div class="space-list">${spaceCards}</div>
       <div class="home-footer"><a href="chart.html">📈 Аналитика имён 2015–2026</a></div>
     </div>`)
 
   bindNav()
   setSyncStatus(state.syncStatus, state.pendingCount)
+  document.querySelectorAll('.home-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.homeTab = btn.dataset.tab
+      renderHome()
+    })
+  })
 }
 
 // ─── VIEW: NEW SPACE ──────────────────────────────────────────────────────────
@@ -652,6 +705,7 @@ async function renderVoting(spaceId) {
   state.space = space
   state.votes = await dbGetVotes(spaceId)
   state.skips = new Set()
+  state.queue = shuffle(state.names.map(n => n.name)) // new random order each session
   renderVotingCard(spaceId)
 }
 
@@ -677,6 +731,10 @@ function renderVotingCard(spaceId) {
         <a class="history-link" data-nav="/space/${spaceId}/history">История</a>
         ${isCreator ? `<a class="history-link" data-nav="/space/${spaceId}/admin">⚙</a>` : ''}
       </div>
+      <div class="card-deck">
+      <div class="card-ghost card-ghost-2" style="background:linear-gradient(145deg,${c1}55,${c2}55)"></div>
+      <div class="card-ghost card-ghost-1" style="background:linear-gradient(145deg,${c1}88,${c2}88)"></div>
+      <div class="card-wrap">
       <div class="name-card" style="background:linear-gradient(145deg,${c1},${c2})">
         <div class="card-overlay"></div>
         <button class="card-skip" data-action="skip">Пропустить</button>
@@ -689,6 +747,8 @@ function renderVotingCard(spaceId) {
           ${current.nicknames?.length ? `<div class="card-nicknames">👥 ${current.nicknames.map(esc).join(' · ')}</div>` : ''}
           ${current.funFact ? `<div class="card-fact">${esc(current.funFact)}</div>` : ''}
         </div>
+      </div>
+      </div>
       </div>
       <div class="rating-section">
         <div class="rating-grid">
@@ -714,23 +774,55 @@ function renderVotingCard(spaceId) {
     })
   })
 
+  function flyCard(dir) {
+    return new Promise(resolve => {
+      const card = document.querySelector('.name-card')
+      if (!card) return resolve()
+      card.classList.remove('fly-left', 'fly-right', 'fly-up')
+      void card.offsetWidth // force reflow so animation restarts
+      card.classList.add('fly-' + dir)
+      let done = false
+      const finish = () => { if (!done) { done = true; resolve() } }
+      card.addEventListener('animationend', finish, { once: true })
+      setTimeout(finish, 350) // fallback if animation events disabled
+    })
+  }
+
   document.getElementById('btn-next').addEventListener('click', async () => {
     if (selected === null) return
+    document.getElementById('btn-next').disabled = true
+    document.querySelectorAll('.r-btn').forEach(b => b.style.pointerEvents = 'none')
+    const dir = selected <= 2 ? 'left' : selected >= 4 ? 'right' : 'left'
+    await flyCard(dir)
     await doVote(spaceId, current.name, selected)
     renderVotingCard(spaceId)
   })
 
-  document.querySelector('[data-action="skip"]').addEventListener('click', () => {
+  document.querySelector('[data-action="skip"]').addEventListener('click', async () => {
+    document.querySelector('[data-action="skip"]').disabled = true
+    await flyCard('up')
     state.skips.add(current.name)
     renderVotingCard(spaceId)
   })
 }
 
+function shuffle(arr) {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
 function getVotingQueue() {
-  const unvoted = state.names.filter(n => state.votes[n.name] === undefined)
-  const normal = unvoted.filter(n => !state.skips.has(n.name))
-  const skipped = unvoted.filter(n => state.skips.has(n.name))
-  return [...normal, ...skipped]
+  // Ensure queue is initialized
+  if (!state.queue.length) state.queue = shuffle(state.names.map(n => n.name))
+  const voted = new Set(Object.keys(state.votes))
+  const byName = Object.fromEntries(state.names.map(n => [n.name, n]))
+  const normal = state.queue.filter(n => !voted.has(n) && !state.skips.has(n))
+  const skipped = state.queue.filter(n => !voted.has(n) && state.skips.has(n))
+  return [...normal, ...skipped].map(n => byName[n]).filter(Boolean)
 }
 
 async function doVote(spaceId, name, score) {
@@ -1064,6 +1156,30 @@ function esc(s) {
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 async function init() {
   await loadNames()
+
+  // E2E test mode: ?e2e_user=BASE64_JSON — only works on localhost
+  const _e2eParam = new URLSearchParams(location.search).get('e2e_user')
+  if (_e2eParam && ['localhost', '127.0.0.1'].includes(location.hostname)) {
+    try {
+      state.user = JSON.parse(atob(_e2eParam))
+      // Expose helpers for test assertions
+      window.__e2e = {
+        state,
+        getVotes: (sid) => dbGetVotes(sid),
+        getOutbox: async () => { const db = await getDB(); return db.getAll('outbox') },
+        getSpaces: (uid) => dbGetMySpaces(uid),
+        navigate,
+        blockSync: (v) => { window._blockSync = v },
+      }
+      const pending = sessionStorage.getItem('pendingRoute')
+      if (pending) { sessionStorage.removeItem('pendingRoute'); location.hash = pending }
+      window.addEventListener('hashchange', route)
+      window.addEventListener('online', () => { toast('Соединение восстановлено', 'ok'); drainOutbox() })
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) drainOutbox() })
+      await route()
+      return
+    } catch (_) {}
+  }
 
   onAuthStateChanged(fbAuth, async user => {
     state.user = user
