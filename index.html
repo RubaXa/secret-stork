@@ -479,44 +479,38 @@ async function drainOutbox() {
 
 // NOTE: requires Firestore security rule for users/{uid}/spaces subcollection:
 // match /users/{uid}/{document=**} { allow read, write: if request.auth.uid == uid; }
-let _homeSyncDone = false
+let _lastHomeSync = 0
+const HOME_SYNC_INTERVAL = 30_000 // re-sync at most every 30s
 
 async function syncSpacesFromFirestore(uid) {
   L('sync#fetch', 'start uid=' + safeUid(uid))
   let hadNew = false
+
+  // Step 1: spaces created by this user
   try {
-    // 1. Spaces created by this user
     const q = query(collection(fbDb, 'spaces'), where('creatorUid', '==', uid))
     const createdSnap = await getDocs(q)
     L('sync#fetch', 'creatorUid query returned=' + createdSnap.size)
     for (const d of createdSnap.docs) {
-      const existing = await dbGetSpace(d.id)
-      if (!existing) {
+      if (!(await dbGetSpace(d.id))) {
         const data = d.data()
-        await dbSaveSpace({
-          id: d.id, ...data,
-          createdAt: data.createdAt?.toMillis?.() || Date.now(),
-          joinedUids: data.joinedUids || [uid]
-        })
+        await dbSaveSpace({ id: d.id, ...data, createdAt: data.createdAt?.toMillis?.() || Date.now(), joinedUids: data.joinedUids || [uid] })
         L('sync#fetch', 'saved created space id=' + d.id.slice(0, 8))
         hadNew = true
       }
     }
+  } catch (e) { L('sync#fetch', 'step1 error', e.message) }
 
-    // 2. Spaces in user's tracked list (joined from link on another device)
+  // Step 2: spaces joined from link on another device
+  try {
     const linksSnap = await getDocs(collection(fbDb, 'users', uid, 'spaces'))
     L('sync#fetch', 'user space links count=' + linksSnap.size)
     for (const linkDoc of linksSnap.docs) {
-      const existing = await dbGetSpace(linkDoc.id)
-      if (!existing) {
+      if (!(await dbGetSpace(linkDoc.id))) {
         const spaceSnap = await getDoc(doc(fbDb, 'spaces', linkDoc.id))
         if (spaceSnap.exists()) {
           const data = spaceSnap.data()
-          const space = {
-            id: spaceSnap.id, ...data,
-            createdAt: data.createdAt?.toMillis?.() || Date.now(),
-            joinedUids: data.joinedUids || []
-          }
+          const space = { id: spaceSnap.id, ...data, createdAt: data.createdAt?.toMillis?.() || Date.now(), joinedUids: data.joinedUids || [] }
           if (!space.joinedUids.includes(uid)) space.joinedUids.push(uid)
           await dbSaveSpace(space)
           L('sync#fetch', 'saved joined space id=' + linkDoc.id.slice(0, 8))
@@ -524,9 +518,27 @@ async function syncSpacesFromFirestore(uid) {
         }
       }
     }
-  } catch (e) {
-    L('sync#fetch', 'ERROR', e.message)
-  }
+  } catch (e) { L('sync#fetch', 'step2 error', e.message) }
+
+  // Step 3: sync vote progress for all known spaces (active sync of _progress)
+  try {
+    const allSpaces = await dbGetMySpaces(uid)
+    L('sync#fetch', 'syncing progress for ' + allSpaces.length + ' spaces')
+    for (const space of allSpaces) {
+      try {
+        const vSnap = await getDoc(doc(fbDb, 'spaces', space.id, 'votes', uid))
+        if (vSnap.exists()) {
+          const count = Object.keys(vSnap.data().votes || {}).length
+          if (count !== (space._progress || 0)) {
+            space._progress = count
+            await dbSaveSpace(space)
+            L('sync#fetch', 'progress updated id=' + space.id.slice(0, 8) + ' → ' + count)
+            hadNew = true
+          }
+        }
+      } catch (e) { L('sync#fetch', 'progress error id=' + space.id.slice(0, 8), e.message) }
+    }
+  } catch (e) { L('sync#fetch', 'step3 error', e.message) }
   L('sync#fetch', 'done hadNew=' + hadNew)
   return hadNew
 }
@@ -782,12 +794,13 @@ async function renderHome(fromSync = false) {
     })
   })
 
-  // Firestore sync on first home load per session
-  if (!fromSync && !_homeSyncDone) {
-    _homeSyncDone = true
+  // Active Firestore sync: runs every HOME_SYNC_INTERVAL ms when visiting home
+  const now = Date.now()
+  if (!fromSync && now - _lastHomeSync > HOME_SYNC_INTERVAL) {
+    _lastHomeSync = now
     syncSpacesFromFirestore(uid).then(hadNew => {
       if (hadNew) {
-        L('home', 'sync brought new spaces, re-rendering')
+        L('home', 'sync updated data, re-rendering')
         renderHome(true)
       }
     })
