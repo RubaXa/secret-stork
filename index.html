@@ -18,6 +18,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 
 /* NAV */
 .nav{background:rgba(15,15,19,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 16px;height:56px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;position:sticky;top:0;z-index:100}
+.nav-compact{height:36px;padding:0 12px}
+.nav-compact .nav-title{font-size:13px}
+.nav-compact .nav-back{font-size:16px;padding:2px 4px}
+.nav-compact .debug-btn,.nav-compact .sync-dot{display:none}
 .nav-left{display:flex;align-items:center;gap:10px;min-width:0}
 .nav-back{background:none;border:none;color:var(--t2);font-size:20px;cursor:pointer;padding:4px 6px;border-radius:8px;line-height:1;flex-shrink:0}
 .nav-back:hover{color:var(--text);background:var(--surface)}
@@ -358,11 +362,26 @@ async function dbSaveVote(spaceId, name, score) {
 
 async function dbGetVotes(spaceId) {
   const db = await getDB()
-  const idx = (await getDB()).transaction('votes').store.index('bySpace')
+  const idx = db.transaction('votes').store.index('bySpace')
   const rows = await idx.getAll(spaceId)
   const map = {}
   rows.forEach(r => { map[r.name] = r.score })
   return map
+}
+
+async function dbGetVotesOrdered(spaceId) {
+  const db = await getDB()
+  const idx = db.transaction('votes').store.index('bySpace')
+  const rows = await idx.getAll(spaceId)
+  rows.sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0))
+  const map = {}
+  rows.forEach(r => { map[r.name] = r.score })
+  return { map, ordered: rows }
+}
+
+async function dbDeleteVote(spaceId, name) {
+  const db = await getDB()
+  await db.delete('votes', `${spaceId}::${name}`)
 }
 
 async function dbAddOutbox(entry) {
@@ -641,12 +660,12 @@ function initials(name) {
   return (name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
 }
 
-function navHtml(title, backPath, showSync = true) {
+function navHtml(title, backPath, showSync = true, compact = false) {
   const avatar = state.user?.photoURL
     ? `<img src="${state.user.photoURL}" alt="">`
     : initials(state.user?.displayName)
   return `
-    <nav class="nav">
+    <nav class="nav${compact ? ' nav-compact' : ''}">
       <div class="nav-left">
         ${backPath !== null ? `<button class="nav-back" data-nav="${backPath}">‹</button>` : ''}
         <span class="nav-title">${title}</span>
@@ -907,6 +926,11 @@ async function renderVoting(spaceId) {
     L('voting', 'Firestore votes sync error', e.message)
   }
 
+  // Reconstruct history from IDB sorted by vote time — survives page refresh
+  const { map: votesMap, ordered } = await dbGetVotesOrdered(spaceId)
+  state.votes = votesMap
+  state.history = ordered.map(r => ({ name: r.name, isVote: true, score: r.score }))
+
   state.skips = new Set()
   state.queue = shuffle(state.names.map(n => n.name))
   renderVotingCard(spaceId)
@@ -949,7 +973,7 @@ function renderVotingCard(spaceId) {
   const isCreator = state.space?.creatorUid === state.user?.uid
 
   mount(`
-    ${navHtml(esc(state.space?.title || 'Голосование'), '/')}
+    ${navHtml(esc(state.space?.title || 'Голосование'), '/', true, true)}
     <div class="voting-view view">
       <div class="voting-top">
         <div class="progress-bar"><div id="prog-fill" class="progress-fill" style="width:${pct}%"></div></div>
@@ -975,7 +999,6 @@ function renderVotingCard(spaceId) {
   bindNav()
   setSyncStatus(state.syncStatus, state.pendingCount)
   setupVotingHandlers(spaceId)
-  setupSwipe(spaceId)
 }
 
 function setupVotingHandlers(spaceId) {
@@ -1040,52 +1063,14 @@ async function advanceCard(spaceId, isVote, score) {
 function goBack(spaceId) {
   if (!state.history.length) return
   const last = state.history.pop()
-  if (last.isVote) delete state.votes[last.name]
-  else state.skips.delete(last.name)
+  if (last.isVote) {
+    delete state.votes[last.name]
+    dbDeleteVote(spaceId, last.name)
+  } else {
+    state.skips.delete(last.name)
+  }
   state.queue = [last.name, ...state.queue.filter(n => n !== last.name)]
   renderVotingCard(spaceId)
-}
-
-let _swipeAbort = null
-function setupSwipe(spaceId) {
-  const deck = document.getElementById('card-deck')
-  if (!deck) return
-  if (_swipeAbort) _swipeAbort.abort()
-  _swipeAbort = new AbortController()
-  const sig = { signal: _swipeAbort.signal }
-  let startX = 0, startY = 0, dragging = false, axisLocked = false
-  const THRESHOLD = 72
-  const getCard = () => deck.querySelector('.card-current .name-card')
-  deck.addEventListener('pointerdown', e => {
-    if (e.target.closest('button')) return
-    const card = getCard(); if (!card) return
-    startX = e.clientX; startY = e.clientY; dragging = true; axisLocked = false
-    card.style.transition = 'none'
-    deck.setPointerCapture(e.pointerId)
-  }, { ...sig, passive: true })
-  deck.addEventListener('pointermove', e => {
-    if (!dragging) return
-    const card = getCard(); if (!card) return
-    const dx = e.clientX - startX, dy = e.clientY - startY
-    if (!axisLocked) {
-      if (Math.abs(dy) > Math.abs(dx) + 8) { dragging = false; card.style.transition = ''; card.style.transform = ''; return }
-      if (Math.abs(dx) > 8) axisLocked = true
-    }
-    const angle = (dx / (deck.offsetWidth / 2)) * 14
-    card.style.transform = `translateX(${dx}px) rotate(${angle}deg)`
-    card.style.opacity = String(Math.max(0.4, 1 - Math.abs(dx) / 260))
-  }, { ...sig, passive: true })
-  const endSwipe = e => {
-    if (!dragging) return; dragging = false
-    const card = getCard(); if (!card) return
-    const dx = e.clientX - startX
-    card.style.transition = 'transform .2s ease, opacity .2s ease'
-    card.style.transform = ''; card.style.opacity = ''
-    if (dx < -THRESHOLD) advanceCard(spaceId, false, null)
-    else if (dx > THRESHOLD) advanceCard(spaceId, true, 5)
-  }
-  deck.addEventListener('pointerup', endSwipe, { ...sig, passive: true })
-  deck.addEventListener('pointercancel', endSwipe, { ...sig, passive: true })
 }
 
 function flyAndAdvance(dir, deck) {
