@@ -284,6 +284,7 @@ const state = {
   skips: new Set(), // names skipped this session
   queue: [],       // shuffled name order for current session
   history: [],     // [{name, isVote, score}] for undo
+  pendingReview: null, // {name, originalScore} when going back to a voted card
   space: null,
   syncStatus: 'ok',
   pendingCount: 0,
@@ -943,7 +944,7 @@ function buildCardWrap(nameData, extraCls) {
         <div class="card-overlay"></div>
         <div class="card-top-btns">
           <button class="card-top-btn card-back-btn" ${state.history.length ? '' : 'disabled'}>← Назад</button>
-          <button class="card-top-btn card-skip-btn">Пропустить</button>
+          <button class="card-top-btn card-skip-btn">${state.pendingReview?.name === nameData.name ? 'Вперёд →' : 'Пропустить'}</button>
         </div>
 
         <div class="card-content">
@@ -986,7 +987,7 @@ function renderVotingCard(spaceId) {
       <div class="rating-section">
         <div class="rating-grid">
           ${RATINGS.map(r => `
-            <button class="r-btn" data-score="${r.score}">
+            <button class="r-btn${state.pendingReview?.name === current.name && state.pendingReview.originalScore === r.score ? ' active' : ''}" data-score="${r.score}">
               <span class="r-emoji">${r.emoji}</span>
               <span class="r-lbl">${r.label}</span>
             </button>`).join('')}
@@ -1004,7 +1005,11 @@ function setupVotingHandlers(spaceId) {
     btn.onclick = () => advanceCard(spaceId, true, +btn.dataset.score)
   })
   const skipBtn = document.querySelector('.card-current .card-skip-btn')
-  if (skipBtn) skipBtn.onclick = () => advanceCard(spaceId, false, null)
+  if (skipBtn) {
+    skipBtn.onclick = state.pendingReview
+      ? () => advanceKeep(spaceId)
+      : () => advanceCard(spaceId, false, null)
+  }
   const backBtn = document.querySelector('.card-current .card-back-btn')
   if (backBtn) {
     backBtn.disabled = !state.history.length
@@ -1020,6 +1025,7 @@ async function advanceCard(spaceId, isVote, score) {
   const backBtn = document.querySelector('.card-current .card-back-btn')
   if (backBtn) backBtn.onclick = null
 
+  state.pendingReview = null
   const queue = getVotingQueue()
   const current = queue[0]
   if (!current) return
@@ -1060,15 +1066,56 @@ async function advanceCard(spaceId, isVote, score) {
 
 function goBack(spaceId) {
   if (!state.history.length) return
+  // If already reviewing, restore that vote in memory before going back further
+  if (state.pendingReview) {
+    state.votes[state.pendingReview.name] = state.pendingReview.originalScore
+    state.pendingReview = null
+  }
   const last = state.history.pop()
   if (last.isVote) {
+    // Keep vote in IDB — only remove from memory so card shows in queue
+    state.pendingReview = { name: last.name, originalScore: last.score }
     delete state.votes[last.name]
-    dbDeleteVote(spaceId, last.name)
   } else {
     state.skips.delete(last.name)
   }
   state.queue = [last.name, ...state.queue.filter(n => n !== last.name)]
   renderVotingCard(spaceId)
+}
+
+async function advanceKeep(spaceId) {
+  document.querySelectorAll('.r-btn').forEach(b => { b.onclick = null; b.style.pointerEvents = 'none' })
+  const skipBtn = document.querySelector('.card-current .card-skip-btn')
+  if (skipBtn) { skipBtn.onclick = null; skipBtn.disabled = true }
+  const backBtn = document.querySelector('.card-current .card-back-btn')
+  if (backBtn) backBtn.onclick = null
+
+  const { name, originalScore } = state.pendingReview
+  state.pendingReview = null
+  state.votes[name] = originalScore
+  state.history.push({ name, isVote: true, score: originalScore })
+
+  const deck = document.getElementById('card-deck')
+  await flyAndAdvance('right', deck)
+
+  const newQueue = getVotingQueue()
+  if (!newQueue.length) { renderDone(spaceId, state.names.length); return }
+
+  const newVoted = Object.keys(state.votes).length
+  const total = state.names.length
+  const fill = document.getElementById('prog-fill')
+  const txt = document.getElementById('prog-text')
+  if (fill) fill.style.width = `${(newVoted / total * 100).toFixed(1)}%`
+  if (txt) txt.textContent = `${newVoted}/${total}`
+
+  const newNext = newQueue[1]
+  if (newNext && deck) {
+    const tmp = document.createElement('div')
+    tmp.innerHTML = buildCardWrap(newNext, 'card-next')
+    deck.insertBefore(tmp.firstElementChild, deck.firstChild)
+  }
+  document.querySelectorAll('.r-btn').forEach(b => { b.style.pointerEvents = '' })
+  setupVotingHandlers(spaceId)
 }
 
 function flyAndAdvance(dir, deck) {
