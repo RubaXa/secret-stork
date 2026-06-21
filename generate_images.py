@@ -98,11 +98,9 @@ def download(url, dest, retries=3):
 
 
 def load_names():
-    names = []
-    for f in sorted(glob.glob(os.path.join(os.path.dirname(__file__), 'data/enriched_part_*.json'))):
-        with open(f) as fp:
-            names.extend(json.load(fp))
-    return names
+    path = os.path.join(os.path.dirname(__file__), 'data/names_enriched.json')
+    with open(path) as f:
+        return json.load(f)
 
 
 def main():

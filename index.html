@@ -112,7 +112,14 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .gender-btn .g-emoji{font-size:24px}
 .gender-btn.active{border-color:var(--accent);background:rgba(124,111,247,.1);color:var(--text)}
 .gender-btn:disabled{opacity:.35;cursor:not-allowed}
-.gender-note{font-size:11px;color:var(--t3);margin-bottom:20px}
+.gender-note{font-size:11px;color:var(--t3);margin-bottom:8px}
+.origin-filter{margin-bottom:20px}
+.origin-filter-label{font-size:13px;font-weight:600;color:var(--t2);margin-bottom:8px;display:block}
+.origin-chips{display:flex;flex-wrap:wrap;gap:8px}
+.origin-chip{display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;user-select:none;transition:all .15s;font-size:13px;color:var(--t2)}
+.origin-chip input{accent-color:var(--accent);width:14px;height:14px;cursor:pointer;flex-shrink:0}
+.origin-chip.checked{border-color:var(--accent);background:rgba(124,111,247,.12);color:var(--text)}
+.origin-chip .chip-count{font-size:11px;opacity:.6}
 
 /* VOTING */
 .voting-view{display:flex;flex-direction:column;max-width:480px;margin:0 auto;width:100%;padding:14px 16px calc(20px + env(safe-area-inset-bottom,0px));height:100%;min-height:0;box-sizing:border-box;overflow:hidden}
@@ -291,8 +298,23 @@ const CARD_BG = [
   ['#43E97B','#38F9D7'],['#FA709A','#FEE140'],['#A18CD1','#FBC2EB'],['#F093FB','#F5576C'],
 ]
 
-// All 221 unique female names (normalized, enriched data loaded from JSON)
-const ALL_NAMES = ["Аврора","Агата","Аглая","Агния","Аделина","Аделия","Адель","Аделя","Адеми","Адриана","Азалия","Аида","Аиша","Айбийке","Айгуль","Айла","Айлин","Айша","Аксинья","Александра","Алеся","Алина","Алиса","Алисия","Алия","Алла","Алсу","Альбина","Альсия","Альфия","Алёна","Амалия","Амелия","Амина","Амира","Анастасия","Ангелина","Анель","Анжелика","Ани","Аниса","Анисия","Анна","Антонина","Анфиса","Ариана","Арианна","Арина","Аруузат","Арууке","Асия","Ася","Афина","Аяна","Беатриса","Белла","Валентина","Валерия","Варвара","Василина","Василиса","Вера","Вероника","Виктория","Виолетта","Вита","Виталина","Влада","Владислава","Галина","Глафира","Гузель","Дана","Даниэла","Дарина","Дария","Дарья","Диана","Дина","Добрава","Доминика","Ева","Евангелина","Евгения","Евдокия","Екатерина","Елена","Елизавета","Есения","Жасмин","Жемчужина","Зайнаб","Закия","Зарина","Зинаида","Злата","Златослава","Зоя","Изабелла","Ирина","Камилла","Карина","Каролина","Катерина","Кира","Клара","Кристина","Ксения","Лада","Лейла","Лея","Лиана","Лидия","Лилия","Лина","Лия","Луиза","Луна","Любава","Любовь","Людмила","Мадина","Майя","Малика","Маргарита","Марианна","Марина","Мария","Марта","Марфа","Марьям","Марьяна","Медина","Мелания","Мелисса","Миа","Мила","Милана","Милена","Милослава","Мира","Мирослава","Мирра","Мишель","Мия","Моника","Муслима","Надежда","Наима","Наталья","Нелли","Ника","Николь","Нина","Нора","Нурия","Оиша","Ойша","Оксана","Олеся","Оливия","Ольга","Омина","Паулина","Пелагея","Полина","Рада","Радмила","Раяна","Регина","Роза","Сабина","Сабрина","Садия","Саида","Салима","Салиха","Самира","Самия","Сара","Сафина","Сафия","Светлана","Светозара","Серафима","Снежана","Солиха","Соня","София","Софья","Станислава","Стефания","Сумайя","Таисия","Тамара","Татьяна","Теона","Тея","Ульяна","Фатима","Флора","Фотима","Хадиджа","Ханифа","Эвелина","Элен","Элеонора","Элиза","Элина","Эльвира","Эльза","Эмили","Эмилия","Эмма","Юлиана","Юлия","Яна","Яромира","Ярослава","Ясина","Ясмина"]
+// All 243 unique female names (normalized, enriched data loaded from JSON)
+const ALL_NAMES = ["Аврора","Агата","Аглая","Агния","Аграфена","Аделина","Аделия","Адель","Аделя","Адеми","Адриана","Азалия","Аида","Аиша","Айбийке","Айгуль","Айла","Айлин","Айша","Аксинья","Акулина","Алевтина","Александра","Алеся","Алина","Алиса","Алисия","Алия","Алла","Алсу","Альбина","Альсия","Альфия","Алёна","Амалия","Амели","Амелия","Амина","Амира","Анастасия","Ангелина","Анель","Анжелика","Ани","Аниса","Анисия","Анна","Антонина","Анфиса","Ариадна","Ариана","Арианна","Арина","Аруузат","Арууке","Асия","Ася","Афина","Аяна","Беатриса","Белла","Божена","Валентина","Валерия","Варвара","Василина","Василиса","Вера","Вероника","Виктория","Виолетта","Вита","Виталина","Влада","Владислава","Галина","Глафира","Гузель","Дана","Даниэла","Дарина","Дария","Дарья","Диана","Дина","Добрава","Доминика","Ева","Евангелина","Евгения","Евдокия","Екатерина","Елена","Елизавета","Есения","Жанна","Жасмин","Жемчужина","Забава","Зайнаб","Закия","Зарина","Зинаида","Злата","Златослава","Зоя","Изабелла","Илана","Илона","Инга","Инесса","Инна","Ирина","Камилла","Капитолина","Карина","Каролина","Катерина","Кира","Клара","Кристина","Ксения","Лада","Лейла","Лея","Лиана","Лидия","Лилия","Лина","Лия","Лора","Луиза","Луна","Любава","Любовь","Людмила","Мадина","Майя","Малика","Маргарита","Марианна","Марина","Мария","Марта","Марфа","Марьям","Марьяна","Медина","Мелания","Мелисса","Миа","Мила","Милана","Милена","Милослава","Мира","Мирослава","Мирра","Мишель","Мия","Моника","Муслима","Надежда","Наима","Наталья","Нелли","Ника","Николь","Нина","Нора","Нурия","Оиша","Ойша","Оксана","Олеся","Оливия","Ольга","Омина","Паулина","Пелагея","Полина","Прасковья","Рада","Радмила","Раяна","Регина","Роза","Сабина","Сабрина","Садия","Саида","Салима","Салиха","Самира","Самия","Сара","Сафина","Сафия","Светлана","Светозара","Серафима","Снежана","Солиха","Соня","София","Софья","Станислава","Стелла","Стефания","Сумайя","Таисия","Тамара","Татьяна","Теона","Тея","Ульяна","Фатима","Флора","Фотима","Хадиджа","Ханифа","Эвелина","Элен","Элеонора","Элиза","Элина","Элла","Эльвира","Эльза","Эмили","Эмилия","Эмма","Эрика","Юлиана","Юлианна","Юлия","Юнна","Яна","Янина","Яромира","Ярослава","Ясина","Ясмина"]
+
+const ORIGIN_GROUPS = [
+  { key: 'greek',   label: 'Греческие',             origins: ['Греческое'] },
+  { key: 'latin',   label: 'Латинские',              origins: ['Латинское', 'Армянское', 'Испанское', 'Провансальское', 'Грузинское'] },
+  { key: 'slavic',  label: 'Славянские',             origins: ['Славянское'] },
+  { key: 'arabic',  label: 'Арабские и Восточные',   origins: ['Арабское', 'Персидское', 'Тюркское'] },
+  { key: 'semitic', label: 'Семитские',              origins: ['Иврит', 'Еврейское', 'Арамейское'] },
+  { key: 'euro',    label: 'Европейские',            origins: ['Германское', 'Скандинавское', 'Кельтское'] },
+]
+
+function getNamesByGroups(keys) {
+  if (!keys || keys.length === 0 || keys.includes('all')) return state.names
+  const originSet = new Set(keys.flatMap(k => (ORIGIN_GROUPS.find(g => g.key === k) || {}).origins || []))
+  return state.names.filter(n => originSet.has(n.origin))
+}
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
 const state = {
@@ -345,7 +367,7 @@ const gProvider = new GoogleAuthProvider()
 let _db
 async function getDB() {
   if (_db) return _db
-  _db = await openDB('names-roulette', 2, {
+  _db = await openDB('names-roulette', 3, {
     upgrade(db, oldVersion, _newVersion, tx) {
       if (oldVersion < 1) {
         db.createObjectStore('spaces', { keyPath: 'id' })
@@ -355,7 +377,10 @@ async function getDB() {
         db.createObjectStore('names', { keyPath: 'name' })
       }
       if (oldVersion < 2) {
-        // Force re-fetch of names to pick up the new `popularity` field
+        tx.objectStore('names').clear()
+      }
+      if (oldVersion < 3) {
+        // App v2: reset names cache (243 names, origin filter support)
         tx.objectStore('names').clear()
       }
     }
@@ -883,6 +908,13 @@ async function renderHome(fromSync = false) {
 
 // ─── VIEW: NEW SPACE ──────────────────────────────────────────────────────────
 function renderNewSpace() {
+  // Compute per-group counts from loaded names
+  const groupCounts = ORIGIN_GROUPS.map(g => {
+    const s = new Set(g.origins)
+    return { ...g, count: state.names.filter(n => s.has(n.origin)).length }
+  })
+  const totalNames = state.names.length
+
   mount(`
     ${navHtml('Новое голосование', '/')}
     <div class="new-space-view view">
@@ -897,24 +929,56 @@ function renderNewSpace() {
           <button class="gender-btn active" id="btn-female"><span class="g-emoji">👧</span>Девочки</button>
           <button class="gender-btn" id="btn-male" disabled><span class="g-emoji">👦</span>Мальчики<br><small style="font-size:10px;opacity:.5">скоро</small></button>
         </div>
-        <div class="gender-note">213 имён из реестра Москвы 2015–2026</div>
+        <div class="gender-note" id="gender-note">${totalNames} имён из реестра Москвы 2015–2026</div>
       </div>
-      <button class="btn btn-primary btn-full btn-lg" id="btn-create">Создать и получить ссылку</button>
+      <div class="form-group origin-filter">
+        <label class="lbl">Категории имён</label>
+        <div class="origin-chips">
+          ${groupCounts.map(g => `
+            <label class="origin-chip checked" data-key="${g.key}">
+              <input type="checkbox" value="${g.key}" checked> ${g.label} <span class="chip-count">${g.count}</span>
+            </label>`).join('')}
+        </div>
+      </div>
+      <button class="btn btn-primary btn-full btn-lg" id="btn-create">Создать — ${totalNames} имён</button>
     </div>`)
 
   bindNav()
   setSyncStatus(state.syncStatus, state.pendingCount)
 
+  const updateCount = () => {
+    const checked = [...document.querySelectorAll('.origin-chips input:checked')].map(el => el.value)
+    const count = getNamesByGroups(checked.length === ORIGIN_GROUPS.length ? ['all'] : checked).length
+    document.getElementById('btn-create').textContent = `Создать — ${count} имён`
+    document.getElementById('gender-note').textContent =
+      checked.length === ORIGIN_GROUPS.length
+        ? `${totalNames} имён из реестра Москвы 2015–2026`
+        : `${count} из ${totalNames} имён`
+  }
+
+  document.querySelectorAll('.origin-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const cb = chip.querySelector('input')
+      cb.checked = !cb.checked
+      chip.classList.toggle('checked', cb.checked)
+      updateCount()
+    })
+    chip.querySelector('input').addEventListener('click', e => e.stopPropagation())
+  })
+
   document.getElementById('btn-create').addEventListener('click', async () => {
     const title = document.getElementById('inp-title').value.trim() || 'Наш список имён'
+    const checked = [...document.querySelectorAll('.origin-chips input:checked')].map(el => el.value)
+    const nameGroups = checked.length === ORIGIN_GROUPS.length ? ['all'] : checked
     const id = genId()
     const spaceData = {
       id, title, status: 'active', gender: 'female',
+      nameGroups,
       creatorUid: state.user.uid,
       creatorName: state.user.displayName || '',
       createdAt: Date.now(),
     }
-    L('newSpace', 'creating id=' + id.slice(0, 8) + ' title=' + title.slice(0, 20))
+    L('newSpace', 'creating id=' + id.slice(0, 8) + ' nameGroups=' + nameGroups.join(','))
     await dbSaveSpace(spaceData)
     await dbAddOutbox({ type: 'SPACE_CREATE', spaceId: id, data: { ...spaceData, createdAt: serverTimestamp() } })
     await dbAddOutbox({ type: 'USER_SPACE_LINK', spaceId: id })
@@ -1037,7 +1101,7 @@ function buildCardWrap(nameData, extraCls) {
 
 function renderVotingCard(spaceId) {
   const queue = getVotingQueue()
-  const total = state.names.length
+  const total = getActiveNames().length
   const voted = Object.keys(state.votes).length
 
   if (queue.length === 0) { renderDone(spaceId, total); return }
@@ -1107,11 +1171,11 @@ async function advanceCard(spaceId, score) {
   await doVote(spaceId, current.name, score)
 
   const newQueue = getVotingQueue()
-  if (!newQueue.length) { renderDone(spaceId, state.names.length); return }
+  if (!newQueue.length) { renderDone(spaceId, getActiveNames().length); return }
 
   // Update progress bar in-place
   const newVoted = Object.keys(state.votes).length
-  const total = state.names.length
+  const total = getActiveNames().length
   const fill = document.getElementById('prog-fill')
   const txt = document.getElementById('prog-text')
   if (fill) fill.style.width = `${(newVoted / total * 100).toFixed(1)}%`
@@ -1158,10 +1222,10 @@ async function advanceKeep(spaceId) {
   await flyAndAdvance('right', deck)
 
   const newQueue = getVotingQueue()
-  if (!newQueue.length) { renderDone(spaceId, state.names.length); return }
+  if (!newQueue.length) { renderDone(spaceId, getActiveNames().length); return }
 
   const newVoted = Object.keys(state.votes).length
-  const total = state.names.length
+  const total = getActiveNames().length
   const fill = document.getElementById('prog-fill')
   const txt = document.getElementById('prog-text')
   if (fill) fill.style.width = `${(newVoted / total * 100).toFixed(1)}%`
@@ -1220,12 +1284,16 @@ function shuffle(arr) {
   return a
 }
 
+function getActiveNames() {
+  return getNamesByGroups(state.space?.nameGroups || ['all'])
+}
+
 function getVotingQueue() {
-  // Ensure queue is initialized
-  if (!state.queue.length) state.queue = shuffle(state.names.map(n => n.name))
+  const activeNames = getActiveNames()
+  if (!state.queue.length) state.queue = shuffle(activeNames.map(n => n.name))
   const voted = new Set(Object.keys(state.votes))
-  const byName = Object.fromEntries(state.names.map(n => [n.name, n]))
-  return state.queue.filter(n => !voted.has(n)).map(n => byName[n]).filter(Boolean)
+  const byName = Object.fromEntries(activeNames.map(n => [n.name, n]))
+  return state.queue.filter(n => !voted.has(n) && byName[n]).map(n => byName[n])
 }
 
 async function doVote(spaceId, name, score) {
@@ -1288,7 +1356,7 @@ async function renderHistory(spaceId) {
   mount(`
     ${navHtml('История оценок', '/space/' + spaceId)}
     <div class="inner-view view">
-      <div style="font-size:13px;color:var(--t2);margin-bottom:4px">${voted.length} из ${state.names.length} оценено</div>
+      <div style="font-size:13px;color:var(--t2);margin-bottom:4px">${voted.length} из ${getActiveNames().length} оценено</div>
       <div class="hist-list">${items}</div>
     </div>`)
 
@@ -1377,7 +1445,7 @@ async function renderAdmin(spaceId) {
     const hasCreator = members.some(m => m.uid === space.creatorUid)
     if (!hasCreator) members.unshift({ uid: space.creatorUid, displayName: space.creatorName || 'Организатор' })
 
-    const total = state.names.length || 213
+    const total = getActiveNames().length || 243
     const memberHtml = members.map(m => {
       const prog = progressMap[m.uid] || 0
       const pct = Math.round(prog / total * 100)
@@ -1401,7 +1469,7 @@ async function renderAdmin(spaceId) {
     space._memberCount = members.length
     let totalProg = 0
     members.forEach(m => { totalProg += (progressMap[m.uid] || 0) })
-    space._avgProgress = members.length > 0 ? (totalProg / members.length / (state.names.length || 213)) * 100 : 0
+    space._avgProgress = members.length > 0 ? (totalProg / members.length / (getActiveNames().length || 243)) * 100 : 0
     await dbSaveSpace(space)
     L('admin', 'cached memberCount=' + space._memberCount + ' avgProg=' + Math.round(space._avgProgress) + '%')
   } catch (e) {
