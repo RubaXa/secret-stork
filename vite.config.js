@@ -15,7 +15,7 @@ export default defineConfig({
     port: 4173,
     strictPort: true,
   },
-  base: '/names-roulette/',
+  base: '/secret-stork/',
   build: {
     rollupOptions: {
       external: (id) => id.startsWith('https://'),

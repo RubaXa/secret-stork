@@ -21,7 +21,7 @@ git branch -D gh-pages-deploy
 **Делать это при каждом коммите в main**, который меняет исходники (`src/`, `public/`, `index.html`, `vite.config.js`).
 
 GitHub Pages настроен на ветку `gh-pages`, папка `/ (root)`.
-Сайт: https://rubaxa.github.io/names-roulette/
+Сайт: https://rubaxa.github.io/secret-stork/
 
 ## Стек
 
