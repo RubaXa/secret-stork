@@ -12,8 +12,13 @@ export default defineConfig({
     strictPort: false,
   },
   preview: {
-    port: 4200,
+    port: 4173,
     strictPort: true,
   },
   base: '/names-roulette/',
+  build: {
+    rollupOptions: {
+      external: (id) => id.startsWith('https://'),
+    },
+  },
 })

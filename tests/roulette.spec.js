@@ -5,7 +5,7 @@
 
 const { test, expect } = require('@playwright/test')
 
-const BASE = 'http://localhost:4200'
+const BASE = 'http://localhost:4173'
 const TOTAL_NAMES = 243
 
 // Fake user injected via ?e2e_user= param (only works on localhost)
