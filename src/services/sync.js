@@ -10,9 +10,12 @@ export function setSyncUser(user) {
 }
 
 export async function drainOutbox() {
-  if (!_user || _draining || window._blockSync) {
-    L('sync#drain', 'skip user=' + !!_user + ' draining=' + _draining + ' blocked=' + !!window._blockSync)
-    return { status: _user ? 'ok' : 'no-user', remaining: 0 }
+  if (!_user) return { status: 'no-user', remaining: 0 }
+  if (_draining || window._blockSync) {
+    L('sync#drain', 'skip draining=' + _draining + ' blocked=' + !!window._blockSync)
+    const db = await getDB()
+    const remaining = (await db.getAll('outbox')).length
+    return { status: window._blockSync ? 'blocked' : 'ok', remaining }
   }
   _draining = true
   L('sync#drain', 'start uid=' + safeUid(_user.uid))

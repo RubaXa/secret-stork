@@ -1,4 +1,5 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
+import { authReady, currentUser, waitForAuth } from '@/composables/useAuth.js'
 
 const routes = [
   { path: '/',                      component: () => import('@/views/HomeView.vue') },
@@ -16,7 +17,22 @@ const router = createRouter({
   scrollBehavior: () => ({ top: 0 }),
 })
 
-// View Transitions API — wired in VotingView per-card only;
-// global page transitions handled by <Transition> in App.vue
+router.beforeEach(async (to) => {
+  await waitForAuth()
+
+  if (to.path !== '/login' && !currentUser.value) {
+    if (to.path !== '/') sessionStorage.setItem('pendingRoute', '#' + to.fullPath)
+    return '/login'
+  }
+
+  if (to.path === '/login' && currentUser.value) {
+    const pending = sessionStorage.getItem('pendingRoute')
+    if (pending) {
+      sessionStorage.removeItem('pendingRoute')
+      return pending.replace(/^#/, '') || '/'
+    }
+    return '/'
+  }
+})
 
 export default router

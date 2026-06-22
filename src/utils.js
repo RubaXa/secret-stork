@@ -1,3 +1,8 @@
+export const CARD_BG = [
+  ['#FF6B9D','#FF9A5C'],['#7B68EE','#48C0A3'],['#FFD93D','#FF9B44'],['#4FACFE','#00F2FE'],
+  ['#43E97B','#38F9D7'],['#FA709A','#FEE140'],['#A18CD1','#FBC2EB'],['#F093FB','#F5576C'],
+]
+
 export const RATINGS = [
   { score: 1, emoji: '❌', label: 'Точно нет' },
   { score: 2, emoji: '👎', label: 'Скорее нет' },

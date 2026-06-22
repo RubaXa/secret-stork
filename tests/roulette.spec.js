@@ -5,7 +5,7 @@
 
 const { test, expect } = require('@playwright/test')
 
-const BASE = 'http://localhost:4173'
+const BASE = 'http://localhost:4173/names-roulette'
 const TOTAL_NAMES = 243
 
 // Fake user injected via ?e2e_user= param (only works on localhost)
@@ -25,7 +25,9 @@ const FAKE_USER_2 = Buffer.from(JSON.stringify({
 })).toString('base64')
 
 function appUrl(hash = '') {
-  return `${BASE}/?e2e_user=${FAKE_USER}${hash ? '#' + hash : ''}`
+  // strip a leading '#' so callers can pass either '#/path' or '/path'
+  const h = hash.startsWith('#') ? hash.slice(1) : hash
+  return `${BASE}/?e2e_user=${FAKE_USER}${h ? '#' + h : ''}`
 }
 
 // Helper: read IDB votes for a space
@@ -53,7 +55,7 @@ async function getSpaceId(page) {
 test.describe('Auth', () => {
 
   test('shows login screen when not authenticated (desktop)', async ({ page }) => {
-    await page.goto(BASE)
+    await page.goto(BASE + '/')
     await expect(page.locator('.login-title')).toHaveText('Назовём')
     await expect(page.locator('#btn-login')).toBeVisible()
     await page.screenshot({ path: 'tests/screenshots/01_login_desktop.png' })
@@ -61,7 +63,7 @@ test.describe('Auth', () => {
 
   test('shows login screen when not authenticated (mobile)', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
-    await page.goto(BASE)
+    await page.goto(BASE + '/')
     await expect(page.locator('.login-title')).toBeVisible()
     await page.screenshot({ path: 'tests/screenshots/02_login_mobile.png' })
   })
@@ -83,7 +85,7 @@ test.describe('Auth', () => {
   test('analytics link navigates to chart.html', async ({ page }) => {
     await page.goto(appUrl())
     const [newPage] = await Promise.all([
-      page.waitForEvent('popup').catch(() => null),
+      page.waitForEvent('popup', { timeout: 1000 }).catch(() => null),
       page.locator('a[href="chart.html"]').click(),
     ])
     // chart.html is same tab (no target=_blank)
@@ -109,7 +111,7 @@ test.describe('Create Space', () => {
 
     // Should redirect to /space/:id
     await page.waitForURL(/.*#\/space\/[a-z0-9]+$/)
-    await expect(page.locator('.name-card')).toBeVisible()
+    await expect(page.locator('.card-current .name-card')).toBeVisible()
     await page.screenshot({ path: 'tests/screenshots/05_voting_screen.png' })
   })
 
@@ -149,7 +151,7 @@ test.describe('Local-first voting (IndexedDB)', () => {
     // Vote on 3 names
     const votes = []
     for (let i = 0; i < 3; i++) {
-      const nameEl = page.locator('.card-name')
+      const nameEl = page.locator('.card-current .card-name')
       const name = await nameEl.textContent()
       await page.locator('.r-btn').nth(3).click() // score=4 "Нравится"
       await page.locator('#btn-next').click()
@@ -265,9 +267,9 @@ test.describe('Voting UX', () => {
 
   test('skip moves name to end of queue', async ({ page }) => {
     await goToVoting(page)
-    const firstName = await page.locator('.card-name').textContent()
+    const firstName = await page.locator('.card-current .card-name').textContent()
     await page.locator('[data-testid="card-skip"]').click()
-    const secondName = await page.locator('.card-name').textContent()
+    const secondName = await page.locator('.card-current .card-name').textContent()
     expect(secondName.trim()).not.toBe(firstName.trim())
     await page.screenshot({ path: 'tests/screenshots/11_skip_name.png' })
   })
@@ -361,8 +363,8 @@ test.describe('Mobile (390×844)', () => {
     await page.locator('#btn-create').click()
     await page.waitForURL(/.*#\/space\//)
     await page.evaluate(() => window.__e2e.blockSync(true))
-    await expect(page.locator('.name-card')).toBeVisible()
-    const card = await page.locator('.name-card').boundingBox()
+    await expect(page.locator('.card-current .name-card')).toBeVisible()
+    const card = await page.locator('.card-current .name-card').boundingBox()
     expect(card.width).toBeLessThanOrEqual(390)
     await page.screenshot({ path: 'tests/screenshots/14_voting_mobile.png' })
   })
