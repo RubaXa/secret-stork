@@ -16,10 +16,10 @@
     <template v-if="mainTab === 'rating' && !loading">
       <div class="penalty-ctrl">
         <div class="penalty-label">
-          <span>Штраф за отрицательные голоса</span>
-          <span>×{{ penalty.toFixed(1) }}</span>
+          <span>Штраф за популярность имени</span>
+          <span>{{ penalty }}%</span>
         </div>
-        <input class="pen-range" type="range" min="0" max="2" step="0.1" v-model.number="penalty" />
+        <input class="pen-range" type="range" min="0" max="100" step="1" v-model.number="penalty" />
       </div>
       <div class="viz-switch">
         <button class="viz-btn" :class="{ on: vizMode === 'likert' }" @click="vizMode = 'likert'">≡ Ликерт</button>
@@ -140,9 +140,10 @@
 //   'heat'   — grid table: rows = names sorted by score, columns = participants, cell = emoji on score-colored bg.
 //   'strip'  — dot plot: each name is a 1–5 axis, each participant is a colored dot at their score position.
 //
-// Penalty slider (penalty, 0–2):
-//   @invariant Applies only to scores ≤ 2: effectiveScore = max(0, raw - penalty).
-//   Affects ranking order but not the raw vote cells shown in heat/strip/likert.
+// Penalty slider (penalty, 0–100 int):
+//   @invariant score = avg - (penalty/100) * popularity * RATINGS.length
+//   Popular names (Анна, Соня — high popularity) drop in rank as penalty increases.
+//   Affects ranking order only; raw vote cells in heat/strip/likert always show avg.
 
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -182,9 +183,12 @@ const participants = computed(() => {
 })
 
 /**
- * @purpose Aggregate all participant votes into a ranked list with penalty-adjusted average.
- * @invariant penalty only reduces scores ≤ 2 — scores 3–5 are never penalised.
- * @invariant Sorted descending by penalty-adjusted avg; raw voteCounts reflect original scores for display.
+ * @purpose Aggregate all participant votes into a ranked list, sorted by popularity-penalised score.
+ * @invariant `avg` is always the raw unpenalised average — used for display.
+ * @invariant `score` = avg - (penalty/100) * popularity * RATINGS.length — used only for sort order.
+ * @invariant `popularity` comes from the enriched names dataset (0–1 float from real demographic data).
+ *   Popular names (Анна, Соня, Мария) have high popularity and drop in rank as penalty increases.
+ *   Fallback popularity = 0.1 when name is absent from the dataset (e.g. network miss).
  */
 const aggregated = computed(() => {
   // #region START_AGGREGATE_SCORES
@@ -201,11 +205,12 @@ const aggregated = computed(() => {
     .map(([name, scores]) => {
       const voteCounts = {}
       scores.forEach(s => { voteCounts[s] = (voteCounts[s] || 0) + 1 })
-      const effectiveScores = scores.map(s => s <= 2 ? Math.max(0, s - penalty.value) : s)
-      const avg = effectiveScores.reduce((s, v) => s + v, 0) / effectiveScores.length
-      return { name, origin: byName[name]?.origin || '', avg, voteCounts, total: scores.length }
+      const avg = scores.reduce((s, v) => s + v, 0) / scores.length
+      const popularity = byName[name]?.popularity ?? 0.1
+      const score = avg - (penalty.value / 100) * popularity * RATINGS.length
+      return { name, origin: byName[name]?.origin || '', avg, score, voteCounts, total: scores.length }
     })
-    .sort((a, b) => b.avg - a.avg)
+    .sort((a, b) => b.score - a.score)
   // #endregion END_AGGREGATE_SCORES
 })
 
