@@ -1,8 +1,12 @@
+// @file: Name catalogue — static fallback list, origin groups, and IDB-cached enriched metadata.
+// @consumers: composables/useSync.js (via loadNames), VotingView.vue, AdminView.vue, ResultsView.vue
+
 import { L } from './logger.js'
 import { getDB } from './db.js'
 
 export const ALL_NAMES = ["Аврора","Агата","Аглая","Агния","Аграфена","Аделина","Аделия","Адель","Аделя","Адеми","Адриана","Азалия","Аида","Аиша","Айбийке","Айгуль","Айла","Айлин","Айша","Аксинья","Акулина","Алевтина","Александра","Алеся","Алина","Алиса","Алисия","Алия","Алла","Алсу","Альбина","Альсия","Альфия","Алёна","Амалия","Амели","Амелия","Амина","Амира","Анастасия","Ангелина","Анель","Анжелика","Ани","Аниса","Анисия","Анна","Антонина","Анфиса","Ариадна","Ариана","Арианна","Арина","Аруузат","Арууке","Асия","Ася","Афина","Аяна","Беатриса","Белла","Божена","Валентина","Валерия","Варвара","Василина","Василиса","Вера","Вероника","Виктория","Виолетта","Вита","Виталина","Влада","Владислава","Галина","Глафира","Гузель","Дана","Даниэла","Дарина","Дария","Дарья","Диана","Дина","Добрава","Доминика","Ева","Евангелина","Евгения","Евдокия","Екатерина","Елена","Елизавета","Есения","Жанна","Жасмин","Жемчужина","Забава","Зайнаб","Закия","Зарина","Зинаида","Злата","Златослава","Зоя","Изабелла","Илана","Илона","Инга","Инесса","Инна","Ирина","Камилла","Капитолина","Карина","Каролина","Катерина","Кира","Клара","Кристина","Ксения","Лада","Лейла","Лея","Лиана","Лидия","Лилия","Лина","Лия","Лора","Луиза","Луна","Любава","Любовь","Людмила","Мадина","Майя","Малика","Маргарита","Марианна","Марина","Мария","Марта","Марфа","Марьям","Марьяна","Медина","Мелания","Мелисса","Миа","Мила","Милана","Милена","Милослава","Мира","Мирослава","Мирра","Мишель","Мия","Моника","Муслима","Надежда","Наима","Наталья","Нелли","Ника","Николь","Нина","Нора","Нурия","Оиша","Ойша","Оксана","Олеся","Оливия","Ольга","Омина","Паулина","Пелагея","Полина","Прасковья","Рада","Радмила","Раяна","Регина","Роза","Сабина","Сабрина","Садия","Саида","Салима","Салиха","Самира","Самия","Сара","Сафина","Сафия","Светлана","Светозара","Серафима","Снежана","Солиха","Соня","София","Софья","Станислава","Стелла","Стефания","Сумайя","Таисия","Тамара","Татьяна","Теона","Тея","Ульяна","Фатима","Флора","Фотима","Хадиджа","Ханифа","Эвелина","Элен","Элеонора","Элиза","Элина","Элла","Эльвира","Эльза","Эмили","Эмилия","Эмма","Эрика","Юлиана","Юлианна","Юлия","Юнна","Яна","Янина","Яромира","Ярослава","Ясина","Ясмина"]
 
+/** @purpose Origin group definitions mapping UI filter keys to Firestore origin strings. */
 export const ORIGIN_GROUPS = [
   { key: 'greek',   label: 'Греческие',           origins: ['Греческое'] },
   { key: 'latin',   label: 'Латинские',            origins: ['Латинское', 'Армянское', 'Испанское', 'Провансальское', 'Грузинское'] },
@@ -14,8 +18,16 @@ export const ORIGIN_GROUPS = [
 
 let _names = []
 
+/**
+ * @purpose Load enriched name data through a three-level cascade: IDB cache → network fetch → static fallback.
+ * @invariant Always populates _names; caller can always proceed after await regardless of network/IDB availability.
+ * @returns {Promise<object[]>} Array of name objects; enriched entries have { name, origin, ... }; fallback entries have { name } only.
+ * @sideEffect IDB read on cache check; network GET on miss; IDB write after successful fetch.
+ */
 export async function loadNames() {
   L('names#load', 'start')
+
+  // #region START_NAMES_IDB_CACHE_CHECK
   try {
     const db = await getDB()
     const cached = await db.getAll('names')
@@ -25,7 +37,9 @@ export async function loadNames() {
       return _names
     }
   } catch (_) {}
+  // #endregion END_NAMES_IDB_CACHE_CHECK
 
+  // #region START_NAMES_NETWORK_FETCH
   try {
     const r = await fetch(import.meta.env.BASE_URL + 'data/names_enriched.json')
     if (r.ok) {
@@ -40,16 +54,31 @@ export async function loadNames() {
   } catch (e) {
     L('names#load', 'fetch error', e.message)
   }
+  // #endregion END_NAMES_NETWORK_FETCH
 
+  // #region START_NAMES_STATIC_FALLBACK
+  // purpose: guarantees voting can proceed without network or IDB — origin metadata unavailable in this path
   _names = ALL_NAMES.map(n => ({ name: n }))
   L('names#load', 'fallback to ALL_NAMES count=' + _names.length)
   return _names
+  // #endregion END_NAMES_STATIC_FALLBACK
 }
 
+/**
+ * @purpose Return the currently loaded name list.
+ * @invariant Returns empty array if loadNames() has not been called yet.
+ * @returns {object[]}
+ */
 export function getNames() {
   return _names
 }
 
+/**
+ * @purpose Filter names by origin group keys; returns the full list when keys include 'all' or are empty.
+ * @param {string[]} keys Origin group keys from ORIGIN_GROUPS, or ['all'].
+ * @param {object[]} [names] Override list; defaults to module-level _names.
+ * @returns {object[]}
+ */
 export function getNamesByGroups(keys, names) {
   const list = names || _names
   if (!keys || keys.length === 0 || keys.includes('all')) return list
