@@ -6,7 +6,7 @@
 const { test, expect } = require('@playwright/test')
 
 const BASE = 'http://localhost:4200'
-const TOTAL_NAMES = 213
+const TOTAL_NAMES = 243
 
 // Fake user injected via ?e2e_user= param (only works on localhost)
 const FAKE_USER = Buffer.from(JSON.stringify({
@@ -54,7 +54,7 @@ test.describe('Auth', () => {
 
   test('shows login screen when not authenticated (desktop)', async ({ page }) => {
     await page.goto(BASE)
-    await expect(page.locator('.login-title')).toHaveText('Имена · Рулетка')
+    await expect(page.locator('.login-title')).toHaveText('Назовём')
     await expect(page.locator('#btn-login')).toBeVisible()
     await page.screenshot({ path: 'tests/screenshots/01_login_desktop.png' })
   })
@@ -69,7 +69,7 @@ test.describe('Auth', () => {
   test('shows home screen with fake auth (desktop)', async ({ page }) => {
     await page.goto(appUrl())
     await page.waitForSelector('.home-create')
-    await expect(page.locator('.home-create-text')).toHaveText('Создать Space')
+    await expect(page.locator('.home-create-text')).toHaveText('Новое голосование')
     await page.screenshot({ path: 'tests/screenshots/03_home_desktop.png' })
   })
 
@@ -252,21 +252,21 @@ test.describe('Voting UX', () => {
   test('progress bar advances with each vote', async ({ page }) => {
     await goToVoting(page)
     const progressBefore = await page.locator('.progress-text').textContent()
-    expect(progressBefore).toBe('0/213')
+    expect(progressBefore).toBe('0/243')
 
     await page.locator('.r-btn').nth(3).click()
     await page.locator('#btn-next').click()
     await page.waitForTimeout(300)
 
     const progressAfter = await page.locator('.progress-text').textContent()
-    expect(progressAfter).toBe('1/213')
+    expect(progressAfter).toBe('1/243')
     await page.screenshot({ path: 'tests/screenshots/10_progress_advance.png' })
   })
 
   test('skip moves name to end of queue', async ({ page }) => {
     await goToVoting(page)
     const firstName = await page.locator('.card-name').textContent()
-    await page.locator('.card-skip').click()
+    await page.locator('[data-testid="card-skip"]').click()
     const secondName = await page.locator('.card-name').textContent()
     expect(secondName.trim()).not.toBe(firstName.trim())
     await page.screenshot({ path: 'tests/screenshots/11_skip_name.png' })
@@ -308,7 +308,7 @@ test.describe('Voting UX', () => {
     // Should navigate back to voting with that name available
     await page.waitForSelector('.voting-view')
     const progress = await page.locator('.progress-text').textContent()
-    expect(progress).toBe('0/213')
+    expect(progress).toBe('0/243')
   })
 
 })
