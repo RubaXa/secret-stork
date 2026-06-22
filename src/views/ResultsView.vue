@@ -65,8 +65,14 @@
         <template v-else-if="vizMode === 'likert'">
           <div v-for="(item, i) in aggregated" :key="item.name" class="lik-row">
             <div class="lik-rank">{{ i + 1 }}</div>
-            <div class="lik-name" :title="item.name">
-              {{ item.name }}<span v-if="item.origin" class="lik-origin"> · {{ item.origin }}</span>
+            <div class="lik-name-col">
+              <div v-if="item.p.pop > 0.05 || item.p.dis > 0.05 || item.p.sig > 0.05 || item.p.len > 0.05" class="pchips-above">
+                <span v-if="item.p.pop > 0.05" class="pchip-ab pchip-pop">pop −{{ item.p.pop.toFixed(1) }}</span>
+                <span v-if="item.p.dis > 0.05" class="pchip-ab pchip-dis">veto −{{ item.p.dis.toFixed(1) }}</span>
+                <span v-if="item.p.sig > 0.05" class="pchip-ab pchip-sig">σ −{{ item.p.sig.toFixed(1) }}</span>
+                <span v-if="item.p.len > 0.05" class="pchip-ab pchip-len">len −{{ item.p.len.toFixed(1) }}</span>
+              </div>
+              <div class="lik-name" :title="item.name">{{ item.name }}<span v-if="item.origin" class="lik-origin"> · {{ item.origin }}</span></div>
             </div>
             <div class="lik-mid">
               <div class="lik-bar-wrap">
@@ -87,12 +93,6 @@
                       :title="allVotes[uid]?.[item.name] ? (uid===user?.uid?'Вы':'Участник')+': '+RATINGS[allVotes[uid][item.name]-1].label : ''" />
                   </template>
                 </div>
-              </div>
-              <div v-if="item.p.pop > 0.05 || item.p.dis > 0.05 || item.p.sig > 0.05 || item.p.len > 0.05" class="pchips">
-                <span v-if="item.p.pop > 0.05" class="pchip pchip-pop">pop −{{ item.p.pop.toFixed(1) }}</span>
-                <span v-if="item.p.dis > 0.05" class="pchip pchip-dis">veto −{{ item.p.dis.toFixed(1) }}</span>
-                <span v-if="item.p.sig > 0.05" class="pchip pchip-sig">σ −{{ item.p.sig.toFixed(1) }}</span>
-                <span v-if="item.p.len > 0.05" class="pchip pchip-len">len −{{ item.p.len.toFixed(1) }}</span>
               </div>
             </div>
             <div class="lik-score">
@@ -138,7 +138,15 @@
         <template v-else>
           <div v-for="(item, i) in aggregated" :key="item.name" class="strip-row">
             <div class="strip-rank">{{ i + 1 }}</div>
-            <div class="strip-name" :title="item.name">{{ item.name }}</div>
+            <div class="strip-name-col">
+              <div v-if="item.p.pop > 0.05 || item.p.dis > 0.05 || item.p.sig > 0.05 || item.p.len > 0.05" class="pchips-above">
+                <span v-if="item.p.pop > 0.05" class="pchip-ab pchip-pop">pop −{{ item.p.pop.toFixed(1) }}</span>
+                <span v-if="item.p.dis > 0.05" class="pchip-ab pchip-dis">veto −{{ item.p.dis.toFixed(1) }}</span>
+                <span v-if="item.p.sig > 0.05" class="pchip-ab pchip-sig">σ −{{ item.p.sig.toFixed(1) }}</span>
+                <span v-if="item.p.len > 0.05" class="pchip-ab pchip-len">len −{{ item.p.len.toFixed(1) }}</span>
+              </div>
+              <div class="strip-name" :title="item.name">{{ item.name }}</div>
+            </div>
             <div class="strip-mid">
               <div class="strip-axis">
                 <div v-for="n in 5" :key="n" class="strip-tick" :style="{ left: (n-1)/4*100+'%' }"></div>
@@ -151,12 +159,6 @@
                     top: (2 + j * 5) + 'px',
                   }"
                   :title="allVotes[uid]?.[item.name] ? (uid===user?.uid?'Вы':'Участник')+': '+RATINGS[allVotes[uid][item.name]-1].label : '—'" />
-              </div>
-              <div v-if="item.p.pop > 0.05 || item.p.dis > 0.05 || item.p.sig > 0.05 || item.p.len > 0.05" class="pchips">
-                <span v-if="item.p.pop > 0.05" class="pchip pchip-pop">pop −{{ item.p.pop.toFixed(1) }}</span>
-                <span v-if="item.p.dis > 0.05" class="pchip pchip-dis">veto −{{ item.p.dis.toFixed(1) }}</span>
-                <span v-if="item.p.sig > 0.05" class="pchip pchip-sig">σ −{{ item.p.sig.toFixed(1) }}</span>
-                <span v-if="item.p.len > 0.05" class="pchip pchip-len">len −{{ item.p.len.toFixed(1) }}</span>
               </div>
             </div>
             <div class="strip-score">
