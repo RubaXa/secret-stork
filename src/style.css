@@ -263,7 +263,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .lik-seg{height:100%}
 .lik-empty{background:var(--surface2)}
 .lik-score{font-size:12px;font-weight:700;width:28px;text-align:right;flex-shrink:0;color:var(--text);padding-bottom:1px;position:relative}
-.lik-avg{font-size:10px;color:var(--t3);text-decoration:line-through;font-weight:400;position:absolute;top:-11px;right:0;white-space:nowrap}
+.lik-avg{font-size:10px;color:var(--t2);text-decoration:line-through;font-weight:400;position:absolute;top:-11px;right:0;white-space:nowrap}
 /* B: heat map */
 .heat-scroll{overflow-x:auto}
 .heat-table{width:100%;border-collapse:collapse}
@@ -291,7 +291,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .strip-avg-line{position:absolute;top:2px;bottom:2px;width:2px;border-radius:1px;background:var(--border);transform:translateX(-50%)}
 .strip-dot{position:absolute;width:16px;height:16px;border-radius:50%;transform:translateX(-50%);font-size:10px;display:flex;align-items:center;justify-content:center}
 .strip-score{font-size:12px;font-weight:700;width:28px;text-align:right;flex-shrink:0;color:var(--text);padding-bottom:5px;position:relative}
-.strip-avg{font-size:10px;color:var(--t3);text-decoration:line-through;font-weight:400;position:absolute;top:-11px;right:0;white-space:nowrap}
+.strip-avg{font-size:10px;color:var(--t2);text-decoration:line-through;font-weight:400;position:absolute;top:-11px;right:0;white-space:nowrap}
 /* breakdown */
 .bd-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px}
 .bd-title{font-weight:600;font-size:13px;color:var(--t2);margin-bottom:10px}
