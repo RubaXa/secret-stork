@@ -141,27 +141,28 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .card-top-btn{background:rgba(0,0,0,.25);border:none;border-radius:8px;color:rgba(255,255,255,.7);font-size:12px;padding:6px 11px;cursor:pointer;transition:all .15s}
 .card-top-btn:hover{background:rgba(0,0,0,.45);color:white}
 .card-top-btn:disabled{opacity:.3;cursor:not-allowed}
-@keyframes card-in{from{transform:translateY(16px) scale(.97)}to{transform:none}}
-@keyframes fly-right{
-  0%  {transform:translateX(0) rotate(0deg);opacity:1}
-  100%{transform:translateX(140%) rotate(22deg);opacity:0}
-}
-@keyframes fly-down{
-  0%  {transform:translateY(0) rotate(0deg);opacity:1}
-  100%{transform:translateY(130%) rotate(4deg);opacity:0}
-}
-.name-card{animation:card-in .22s ease-out;transform-origin:50% 30%}
-.name-card.fly-right{animation:fly-right .28s cubic-bezier(.4,0,1,1) forwards!important}
-.name-card.fly-down{animation:fly-down .3s cubic-bezier(.4,0,1,1) forwards!important}
+/* Card-swipe deck — see VotingView.vue @invariant for the mechanic.
+   The leaving card is a separate "ghost" overlay (.swipe-*) that animates out while the
+   stack underneath shifts each card one slot forward via the .card-wrap transition — the two
+   motions overlap into one fluid swap. No keyframe runs on entry (cards are pre-mounted behind),
+   which is what killed the old pop-in jerk. Direction: 4,5→right · 3→up · 1,2→left. */
+@keyframes swipe-right{to{transform:translate(135%,-5%) rotate(15deg);opacity:0}}
+@keyframes swipe-left {to{transform:translate(-135%,-5%) rotate(-15deg);opacity:0}}
+@keyframes swipe-up   {to{transform:translateY(-128%) rotate(-2deg);opacity:0}}
 .home-tabs{display:flex;background:var(--surface2);border-radius:12px;padding:3px;margin-bottom:20px}
 .home-tab{flex:1;padding:9px 4px;border-radius:9px;border:none;background:transparent;color:var(--t2);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
 .home-tab.active{background:var(--surface);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.2)}
 .card-deck{flex:1;position:relative;min-height:0;overflow:visible;z-index:1}
-.card-wrap{position:absolute;inset:0;border-radius:24px;display:flex;flex-direction:column;overflow:hidden}
-.card-current{z-index:2}
-.card-next{z-index:1;transform:rotate(-2deg) scale(.96) translateY(7px);transition:transform .25s cubic-bezier(.22,.68,0,1.1);transform-origin:center}
-.card-next.rising{transform:none}
-.card-next .card-overlay{opacity:.4}
+.card-wrap{position:absolute;inset:0;border-radius:24px;display:flex;flex-direction:column;overflow:hidden;transition:transform .42s cubic-bezier(.22,.61,.36,1);transform-origin:center;will-change:transform;backface-visibility:hidden}
+/* resting slots by depth in the stack (0 = front, glides forward one slot per vote) */
+.card-wrap.depth-0{transform:none}
+.card-wrap.depth-1{transform:scale(.955) translateY(9px) rotate(-1.5deg)}
+.card-wrap.depth-2{transform:scale(.91) translateY(18px) rotate(-2.5deg)}
+.card-wrap:not(.depth-0) .card-overlay{opacity:.45}
+/* the leaving ghost flies out — animation overrides the slot transition while it plays */
+.card-wrap.swipe-right{animation:swipe-right .42s cubic-bezier(.45,0,.7,1) forwards}
+.card-wrap.swipe-left {animation:swipe-left .42s cubic-bezier(.45,0,.7,1) forwards}
+.card-wrap.swipe-up   {animation:swipe-up .42s cubic-bezier(.45,0,.7,1) forwards}
 
 .rating-section{flex-shrink:0;margin-top:12px;position:relative;z-index:3}
 .rating-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}

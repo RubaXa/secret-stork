@@ -33,33 +33,37 @@
       </div>
 
       <div class="card-deck">
-        <!-- Next card (behind) -->
-        <div v-if="nextCard" :key="nextCard.name" class="card-wrap card-next" :class="{ rising: nextRising }">
-          <div class="name-card" :style="cardBg(nextCard)">
-            <div class="card-image" :style="{ backgroundImage: `url('${imgUrl(nextCard.name)}')` }"></div>
+        <!-- Ghost of the just-voted card: flies out while the stack shifts forward underneath -->
+        <div v-if="flyingCard" class="card-wrap" :class="flyingCard.dir" :style="{ zIndex: 6 }">
+          <div class="name-card" :style="cardBg(flyingCard.card)">
+            <div class="card-image" :style="{ backgroundImage: `url('${imgUrl(flyingCard.card.name)}')` }"></div>
             <div class="card-overlay"></div>
-            <div class="card-content">
-              <div class="card-name">{{ nextCard.name }}</div>
-            </div>
+            <div class="card-content"><div class="card-name">{{ flyingCard.card.name }}</div></div>
           </div>
         </div>
 
-        <!-- Current card (front) -->
-        <div class="card-wrap card-current">
-          <div :key="currentCard.name" class="name-card" :class="flyClass" :style="cardBg(currentCard)">
-            <div class="card-image" :style="{ backgroundImage: `url('${imgUrl(currentCard.name)}')` }"></div>
+        <!-- Live stack: front + up to 2 behind, keyed by NAME so promotion never remounts -->
+        <div
+          v-for="(card, i) in stack"
+          :key="card.name"
+          class="card-wrap"
+          :class="['depth-' + i, i === 0 && 'card-current']"
+          :style="{ zIndex: 5 - i }"
+        >
+          <div class="name-card" :style="cardBg(card)">
+            <div class="card-image" :style="{ backgroundImage: `url('${imgUrl(card.name)}')` }"></div>
             <div class="card-overlay"></div>
-            <div class="card-top-btns">
+            <div v-if="i === 0" class="card-top-btns">
               <button class="card-top-btn card-back-btn" :disabled="!history.length || isAnimating" @click="goBack">← Назад</button>
               <button v-if="isReviewing" class="card-top-btn card-skip-btn" data-testid="card-forward" :disabled="isAnimating" @click="advanceKeep">Вперёд →</button>
             </div>
             <div class="card-content">
-              <div class="card-name">{{ currentCard.name }}</div>
-              <div v-if="currentCard.meaning" class="card-meaning">{{ currentCard.meaning }}</div>
-              <div v-if="currentCard.origin" class="card-origin">{{ currentCard.origin }}</div>
-              <div v-if="(currentCard.meaning || currentCard.origin) && (currentCard.nicknames?.length || currentCard.funFact)" class="card-divider"></div>
-              <div v-if="currentCard.nicknames?.length" class="card-nicknames">👥 {{ currentCard.nicknames.join(' · ') }}</div>
-              <div v-if="currentCard.funFact" class="card-fact">{{ currentCard.funFact }}</div>
+              <div class="card-name">{{ card.name }}</div>
+              <div v-if="card.meaning" class="card-meaning">{{ card.meaning }}</div>
+              <div v-if="card.origin" class="card-origin">{{ card.origin }}</div>
+              <div v-if="(card.meaning || card.origin) && (card.nicknames?.length || card.funFact)" class="card-divider"></div>
+              <div v-if="card.nicknames?.length" class="card-nicknames">👥 {{ card.nicknames.join(' · ') }}</div>
+              <div v-if="card.funFact" class="card-fact">{{ card.funFact }}</div>
             </div>
           </div>
         </div>
@@ -102,14 +106,21 @@
 // Voting mechanic (Tinder-style, mirrors legacy index.legacy.html — DO NOT add a "Next"/"Skip" button):
 // @invariant Tapping a rating (.r-btn) INSTANTLY advances — advanceCard(score) flies the card away.
 //   There is NO "Далее"/confirm step and NO "Пропустить"/skip button; both were spec violations.
-// @invariant Two-card deck: .card-next sits behind .card-current; on advance current flies out
-//   (fly-right for score≥4, fly-down for score≤3) while next .rising-s into place (CSS .25s).
+// @invariant Swipe deck: `stack` renders the top 3 queued cards in a v-for keyed by NAME, so when a
+//   vote removes the front name the cards behind are REUSED (not remounted) — they just change their
+//   depth-N class and glide one slot forward via the .card-wrap transform transition. The voted card
+//   is copied into `flyingCard`, a ghost overlay that animates out (.swipe-*) at the same time, so
+//   leave + advance overlap into one motion. Keying by position instead caused remounts → pop-in +
+//   image reflash, which is the jerk/flicker we fixed.
+// @invariant Direction by score: 4,5 → swipe-right · 3 → swipe-up · 1,2 → swipe-left (see swipeDir).
+// @invariant Images are preloaded a few cards ahead (preloadImg watcher) so a photo is cached before
+//   its card surfaces — no flash when a card rises into view.
 // @invariant Review mode (after "← Назад"): goBack() removes the last vote from memory (kept in IDB),
 //   re-queues that name, sets pendingReview. Then isReviewing=true → the card shows a "Вперёд →"
 //   button (advanceKeep, re-confirms the same score) and the prior rating button is highlighted.
 //   Tapping a different rating overwrites via advanceCard.
 
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import NavBar from '@/components/NavBar.vue'
 import { currentUser } from '@/composables/useAuth.js'
@@ -129,9 +140,12 @@ const history = ref([])     // [{ name, score }]
 const pendingReview = ref(null) // { name, originalScore }
 const shuffledQueue = ref([])
 const isLoaded = ref(false)
-const flyClass = ref(null)
-const nextRising = ref(false)
+const flyingCard = ref(null) // { card, dir } — ghost of the just-voted card animating out
 const isAnimating = ref(false)
+
+// @purpose How long the ghost stays mounted = the swipe animation duration (must match the
+//   .swipe-* / .card-wrap transitions in style.css). Vote persistence does NOT wait for this.
+const FLY_MS = 420
 
 const user = currentUser
 
@@ -144,7 +158,8 @@ const votingQueue = computed(() => {
 })
 
 const currentCard = computed(() => votingQueue.value[0] || null)
-const nextCard = computed(() => votingQueue.value[1] || null)
+// @purpose The visible deck: front card + up to 2 behind. Keyed by name in the template.
+const stack = computed(() => votingQueue.value.slice(0, 3))
 const total = computed(() => activeNames.value.length)
 const votedCount = computed(() => Object.keys(votes.value).length)
 const isDone = computed(() => isLoaded.value && total.value > 0 && votingQueue.value.length === 0)
@@ -163,6 +178,21 @@ function cardBg(nameData) {
 
 function imgUrl(name) {
   return `${import.meta.env.BASE_URL}data/images/${encodeURIComponent(name)}.jpg`
+}
+
+// @purpose Warm the browser cache for upcoming card photos so they paint instantly when a card
+//   rises into view (cards use CSS background-image, which otherwise loads on first reveal → flash).
+const _preloaded = new Set()
+function preloadImg(name) {
+  if (!name || _preloaded.has(name)) return
+  _preloaded.add(name)
+  new Image().src = imgUrl(name)
+}
+watch(votingQueue, q => q.slice(0, 5).forEach(c => preloadImg(c.name)), { immediate: true })
+
+// @purpose Map a score to its swipe direction: positive → right, neutral → up, negative → left.
+function swipeDir(score) {
+  return score >= 4 ? 'swipe-right' : score === 3 ? 'swipe-up' : 'swipe-left'
 }
 
 onMounted(async () => {
@@ -225,51 +255,41 @@ onMounted(async () => {
   isLoaded.value = true
 })
 
-// @purpose Vote on the current card and fly it away. Triggered directly by a rating tap (no confirm step).
-// @invariant dir = score≥4 ? 'right' : 'down' (matches RATINGS ❤️/👍 → right, 😐/👎/❌ → down).
-// @invariant 320ms matches the legacy flyAndAdvance finish timeout (fly-right .28s / fly-down .30s + margin).
+// @purpose Vote on the current card and swipe it away. Triggered directly by a rating tap (no confirm).
+// @invariant The queue advances (and the vote persists) IMMEDIATELY — the FLY_MS wait only keeps the
+//   ghost overlay alive for the animation. So the stack glides forward in the same beat the ghost flies.
 async function advanceCard(score) {
   if (isAnimating.value || !currentCard.value) return
   isAnimating.value = true
-  const name = currentCard.value.name
+  const card = currentCard.value
   pendingReview.value = null
-  history.value.push({ name, score })
+  history.value.push({ name: card.name, score })
 
-  const dir = score >= 4 ? 'right' : 'down'
-  flyClass.value = 'fly-' + dir
-  nextRising.value = true
+  flyingCard.value = { card, dir: swipeDir(score) }
+  votes.value = { ...votes.value, [card.name]: score } // removes name from queue → stack shifts forward
+  saveVote(card.name, score) // persist now, don't wait for the animation
 
-  await new Promise(r => setTimeout(r, 320))
-
-  // Advance queue by marking as voted
-  votes.value = { ...votes.value, [name]: score }
-  flyClass.value = null
-  nextRising.value = false
+  await new Promise(r => setTimeout(r, FLY_MS))
+  flyingCard.value = null
   isAnimating.value = false
-
-  // Persist (fire and forget)
-  saveVote(name, score)
 }
 
 // @purpose "Вперёд →" in review mode: re-confirm the previous score unchanged and move on.
 async function advanceKeep() {
-  if (isAnimating.value || !pendingReview.value) return
+  if (isAnimating.value || !pendingReview.value || !currentCard.value) return
   isAnimating.value = true
+  const card = currentCard.value
   const { name, originalScore } = pendingReview.value
   pendingReview.value = null
   history.value.push({ name, score: originalScore })
 
-  flyClass.value = 'fly-right'
-  nextRising.value = true
-
-  await new Promise(r => setTimeout(r, 320))
-
+  flyingCard.value = { card, dir: swipeDir(originalScore) }
   votes.value = { ...votes.value, [name]: originalScore }
-  flyClass.value = null
-  nextRising.value = false
-  isAnimating.value = false
-
   saveVote(name, originalScore)
+
+  await new Promise(r => setTimeout(r, FLY_MS))
+  flyingCard.value = null
+  isAnimating.value = false
 }
 
 async function saveVote(name, score) {
