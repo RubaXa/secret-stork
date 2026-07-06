@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { RATINGS, clampScore, genId, shuffle, initials } from './utils.js'
+import { RATINGS, RATING_COLORS, CARD_BG, clampScore, genId, shuffle, initials, spaceUrl } from './utils.js'
 
 describe('RATINGS', () => {
   it('has 5 entries ordered score 1–5', () => {
@@ -62,5 +62,31 @@ describe('initials', () => {
     expect(initials('')).toBe('?')
     expect(initials(null)).toBe('?')
     expect(initials(undefined)).toBe('?')
+  })
+})
+
+describe('CARD_BG', () => {
+  it('is a non-empty list of [color, color] pairs', () => {
+    expect(CARD_BG.length).toBeGreaterThan(0)
+    for (const pair of CARD_BG) {
+      expect(pair).toHaveLength(2)
+      expect(pair.every(c => /^#[0-9A-Fa-f]{6}$/.test(c))).toBe(true)
+    }
+  })
+})
+
+describe('RATING_COLORS', () => {
+  it('has one color per rating score', () => {
+    expect(RATING_COLORS).toHaveLength(RATINGS.length)
+    expect(RATING_COLORS.every(c => /^#[0-9A-Fa-f]{6}$/.test(c))).toBe(true)
+  })
+})
+
+describe('spaceUrl', () => {
+  it('builds a hash deep-link and strips any existing hash', () => {
+    const url = spaceUrl('abc123')
+    expect(url.endsWith('#/space/abc123')).toBe(true)
+    expect(url.split('#')).toHaveLength(2) // exactly one hash, old one dropped
+    expect(url.startsWith(location.href.split('#')[0])).toBe(true)
   })
 })
