@@ -1,7 +1,6 @@
 <template>
-  <div>
-    <NavBar title="История оценок" :back-path="`/space/${spaceId}`" />
-    <div class="inner-view view">
+  <NavBar title="История оценок" :back-path="`/space/${spaceId}`" />
+  <div class="inner-view view">
       <div style="font-size:13px;color:var(--t2);margin-bottom:4px">{{ voted.length }} из {{ total }} оценено</div>
       <div class="hist-list">
         <div
@@ -20,7 +19,6 @@
           <p class="empty-text">Ещё нет оценок</p>
         </div>
       </div>
-    </div>
   </div>
 </template>
 

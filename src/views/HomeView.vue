@@ -4,8 +4,7 @@
   backPath or SyncDot, so reusing NavBar would require extra prop-drilling for no benefit.
 -->
 <template>
-  <div>
-    <nav class="nav">
+  <nav class="nav">
       <div class="nav-left"><span class="nav-title">✨ Назовём</span></div>
       <div class="nav-right">
         <button class="debug-btn" @click="copyLogs" title="Копировать логи">🐞</button>
@@ -76,7 +75,6 @@
 
       <div class="home-footer"><a href="chart.html">📈 Аналитика имён 2015–2026</a></div>
     </div>
-  </div>
 </template>
 
 <script setup>

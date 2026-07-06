@@ -1,7 +1,6 @@
 <template>
-  <div>
-    <NavBar title="Новое голосование" back-path="/" />
-    <div class="new-space-view view">
+  <NavBar title="Новое голосование" back-path="/" />
+  <div class="new-space-view view">
       <div class="page-title">Новое голосование</div>
 
       <div class="form-group">
@@ -36,7 +35,6 @@
       <button class="btn btn-primary btn-full" id="btn-create" @click="createSpace">
         Создать — {{ activeCount }} имён
       </button>
-    </div>
   </div>
 </template>
 

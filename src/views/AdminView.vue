@@ -1,7 +1,6 @@
 <template>
-  <div>
-    <NavBar title="Панель организатора" back-path="/" />
-    <div class="admin-view view">
+  <NavBar title="Панель организатора" back-path="/" />
+  <div class="admin-view view">
       <div class="admin-head">
         <div class="admin-space-name">{{ space?.title }}</div>
         <div class="admin-status-row">
@@ -42,7 +41,6 @@
         <button class="btn btn-ghost btn-full" style="margin-top:8px;color:var(--danger,#e53935)" @click="handleDelete">Удалить голосование</button>
       </div>
     </div>
-  </div>
 </template>
 
 <script setup>
