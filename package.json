@@ -8,7 +8,8 @@
     "build":    "vite build",
     "preview":  "vite preview",
     "test:e2e": "playwright test --config=playwright.config.js",
-    "test:unit": "vitest run"
+    "test:unit": "vitest run",
+    "verify": "vite build && vitest run && playwright test --config=playwright.config.js"
   },
   "repository": {
     "type": "git",
