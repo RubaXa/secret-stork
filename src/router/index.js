@@ -1,12 +1,13 @@
-// @file: Vue Router configuration — hash history, lazy-loaded views, auth guard.
+// @file: Vue Router configuration — hash history, lazy-loaded views.
 // @consumers: main.js
+// @invariant No auth guard here. Auth is a RENDER GATE in App.vue (LoginView shown in place while
+//   signed out) so the URL never changes during sign-in and deep links can't be lost. There is
+//   deliberately NO /login route and NO pendingRoute — see App.vue for why.
 
 import { createRouter, createWebHashHistory } from 'vue-router'
-import { authReady, currentUser, waitForAuth } from '@/composables/useAuth.js'
 
 const routes = [
   { path: '/',                      component: () => import('@/views/HomeView.vue') },
-  { path: '/login',                 component: () => import('@/views/LoginView.vue') },
   { path: '/new-space',             component: () => import('@/views/NewSpaceView.vue') },
   { path: '/space/:id',             component: () => import('@/views/VotingView.vue') },
   { path: '/space/:id/admin',       component: () => import('@/views/AdminView.vue') },
@@ -18,40 +19,6 @@ const router = createRouter({
   history: createWebHashHistory(),
   routes,
   scrollBehavior: () => ({ top: 0 }),
-})
-
-/**
- * @purpose Global auth guard — block unauthenticated navigation and restore post-login deep links.
- * @invariant waitForAuth() must resolve before any route check; authReady is set by initAuth() in main.js.
- * @sideEffect Reads/writes sessionStorage 'pendingRoute' key for deep-link restoration.
- */
-router.beforeEach(async (to) => {
-  await waitForAuth()
-
-  // #region START_UNAUTHENTICATED_REDIRECT
-  // purpose: redirect to /login and save the intended route so it can be restored after sign-in
-  if (to.path !== '/login' && !currentUser.value) {
-    if (to.path !== '/') sessionStorage.setItem('pendingRoute', '#' + to.fullPath)
-    return '/login'
-  }
-  // #endregion END_UNAUTHENTICATED_REDIRECT
-
-  // #region START_POST_LOGIN_REDIRECT
-  // purpose: restore the deep-link the user originally tried to visit before being forced to sign in.
-  // @invariant Must fire when the user lands on '/' too, not only '/login'. On mobile, Google sign-in
-  //   reloads the whole page and the hash resets to root, so an invited user comes back on '/' — if we
-  //   only restored from '/login', the saved link was silently dropped and they landed on an empty home
-  //   (never reaching the vote, never joining, never showing up for the organizer). This was THE bug.
-  if (currentUser.value && (to.path === '/login' || to.path === '/')) {
-    const pending = sessionStorage.getItem('pendingRoute')
-    if (pending) {
-      sessionStorage.removeItem('pendingRoute')
-      const target = pending.replace(/^#/, '') || '/'
-      if (target !== to.fullPath) return target
-    }
-    if (to.path === '/login') return '/'
-  }
-  // #endregion END_POST_LOGIN_REDIRECT
 })
 
 export default router

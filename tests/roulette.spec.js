@@ -415,16 +415,19 @@ test.describe('Mobile (390×844)', () => {
 
 test.describe('Deep link joining', () => {
 
-  test('unauthenticated user sees login when opening space link', async ({ page }) => {
+  test('signed-out user sees login WITHOUT losing the deep-link URL', async ({ page }) => {
     await page.goto(`${BASE}/#/space/abc123xyz`)
+    // Auth is a render gate: login shows in place, the URL is NOT changed to /login.
     await expect(page.locator('#btn-login')).toBeVisible()
-    // URL is saved so after login they'd be redirected
-    const saved = await page.evaluate(() => sessionStorage.getItem('pendingRoute'))
-    expect(saved).toBe('#/space/abc123xyz')
+    const hash = await page.evaluate(() => location.hash)
+    expect(hash).toBe('#/space/abc123xyz')
+    // No sessionStorage round-trip exists anymore — nothing to save, nothing to lose.
+    const pending = await page.evaluate(() => sessionStorage.getItem('pendingRoute'))
+    expect(pending).toBeNull()
   })
 
-  test('saved deep link is restored even when auth drops the user on home', async ({ page }) => {
-    // Create a space (this is the link that gets shared).
+  test('signed-in user opening a shared link lands on that exact vote', async ({ page }) => {
+    // Create a space (the shared link).
     await page.goto(appUrl())
     await page.locator('.home-create').click()
     await page.locator('#inp-title').fill('Deep Link')
@@ -432,14 +435,11 @@ test.describe('Deep link joining', () => {
     await page.waitForURL(/.*#\/space\//)
     const spaceId = await getSpaceId(page)
 
-    // Reproduce the post-sign-in state on mobile: a pending deep link is saved, but the OAuth
-    // page-reload lands the user on '/' (home), not '/login'.
-    await page.evaluate(id => sessionStorage.setItem('pendingRoute', '#/space/' + id), spaceId)
-    await page.goto(appUrl('/'))
-
-    // The guard must carry them to the vote they were invited to — not leave them on an empty home.
-    await page.waitForURL(new RegExp(`#/space/${spaceId}`))
+    // Open the deep link directly (as an authenticated user). No redirect, no restore —
+    // the render gate means the URL is honoured as-is and the vote renders.
+    await page.goto(appUrl(`/space/${spaceId}`))
     await expect(page.locator('.voting-view, .done-view')).toHaveCount(1)
+    expect(await page.evaluate(() => location.hash)).toBe(`#/space/${spaceId}`)
   })
 
 })

@@ -51,7 +51,7 @@ async function copyLogs() {
 
 function onAvatarClick() {
   if (confirm(`Выйти из аккаунта?\n${user.value?.displayName || user.value?.email}`)) {
-    signOut().then(() => router.push('/login'))
+    signOut().then(() => router.push('/'))
   }
 }
 </script>

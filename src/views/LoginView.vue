@@ -40,22 +40,15 @@
 </template>
 
 <script setup>
-import { useRouter } from 'vue-router'
 import { signIn } from '@/services/auth.js'
 import { toast } from '@/composables/useToast.js'
 
-const router = useRouter()
-
+// @invariant No navigation here. The URL never changed while signed out (App.vue gates rendering),
+//   so once auth resolves App.vue swaps this screen for the route the user was already on — including
+//   a shared deep link. Nothing to restore.
 async function handleSignIn() {
   try {
     await signIn()
-    const pending = sessionStorage.getItem('pendingRoute')
-    if (pending) {
-      sessionStorage.removeItem('pendingRoute')
-      router.push(pending.replace(/^#/, '') || '/')
-    } else {
-      router.push('/')
-    }
   } catch (e) {
     if (e?.code !== 'auth/popup-closed-by-user') {
       toast('Ошибка входа: ' + (e?.message || e), 'error')
