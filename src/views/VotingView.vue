@@ -233,8 +233,8 @@ onMounted(async () => {
   if (!sp || sp.deleted) { router.replace('/'); return }
   space.value = sp
 
-  // Load votes from IDB
-  votes.value = await dbGetVotes(spaceId)
+  // Load votes from IDB (scoped to this user)
+  votes.value = await dbGetVotes(user.value.uid, spaceId)
 
   // Merge from Firestore (cross-device)
   try {
@@ -245,7 +245,7 @@ onMounted(async () => {
       for (const [name, score] of Object.entries(fsVotes)) {
         if (!(name in votes.value)) {
           votes.value = { ...votes.value, [name]: score }
-          await dbSaveVote(spaceId, name, score)
+          await dbSaveVote(user.value.uid, spaceId, name, score)
           added++
         }
       }
@@ -257,7 +257,7 @@ onMounted(async () => {
   } catch (_) {}
 
   // Reconstruct history from IDB (ordered by vote time) — survives page refresh
-  const { ordered } = await dbGetVotesOrdered(spaceId)
+  const { ordered } = await dbGetVotesOrdered(user.value.uid, spaceId)
   history.value = ordered.map(r => ({ name: r.name, score: r.score }))
 
   // Build shuffled queue
@@ -306,8 +306,8 @@ async function advanceKeep() {
 }
 
 async function saveVote(name, score) {
-  await dbSaveVote(spaceId, name, score)
-  await dbAddOutbox({ type: 'VOTE', spaceId, name, score })
+  await dbSaveVote(user.value.uid, spaceId, name, score)
+  await dbAddOutbox({ type: 'VOTE', spaceId, name, score, uid: user.value.uid })
   drain()
   const sp = await dbGetSpace(spaceId)
   if (sp) { sp._progress = Object.keys(votes.value).length; await dbSaveSpace(sp) }

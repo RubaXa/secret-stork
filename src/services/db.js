@@ -14,7 +14,7 @@ let _db
  */
 export async function getDB() {
   if (_db) return _db
-  _db = await openDB('names-roulette', 3, {
+  _db = await openDB('names-roulette', 4, {
     upgrade(db, oldVersion, _newVersion, tx) {
       // #region START_SCHEMA_V1_INIT
       if (oldVersion < 1) {
@@ -30,6 +30,13 @@ export async function getDB() {
       if (oldVersion < 2) tx.objectStore('names').clear()
       if (oldVersion < 3) tx.objectStore('names').clear()
       // #endregion END_SCHEMA_NAMES_RESET
+      // #region START_SCHEMA_VOTES_UID_SCOPE
+      // @invariant v4: vote keys became ${uid}::${spaceId}::${name} (were ${spaceId}::${name}).
+      //   Without the uid, two accounts sharing a browser shared votes — a user who never voted
+      //   inherited the other's and saw the "you rated all N" done screen. Legacy un-scoped records
+      //   are dropped here; the real owner's votes re-hydrate from Firestore (votes/{uid}) on open.
+      if (oldVersion < 4) tx.objectStore('votes').clear()
+      // #endregion END_SCHEMA_VOTES_UID_SCOPE
     },
   })
   return _db
@@ -74,41 +81,45 @@ export async function dbGetMySpaces(uid) {
 }
 
 /**
- * @purpose Persist or overwrite a vote record for a specific name in a space.
+ * @purpose Persist or overwrite a vote record for a specific name in a space, scoped to one user.
+ * @param {string} uid Firebase UID of the voter — part of the key so accounts on one device don't collide.
  * @param {string} spaceId
  * @param {string} name
  * @param {number} score 1–5.
  * @sideEffect IDB write to 'votes' store.
  */
-export async function dbSaveVote(spaceId, name, score) {
+export async function dbSaveVote(uid, spaceId, name, score) {
   const db = await getDB()
-  await db.put('votes', { key: `${spaceId}::${name}`, spaceId, name, score, updatedAt: Date.now() })
+  await db.put('votes', { key: `${uid}::${spaceId}::${name}`, uid, spaceId, name, score, updatedAt: Date.now() })
 }
 
 /**
- * @purpose Return all votes for a space as a name→score map.
+ * @purpose Return one user's votes for a space as a name→score map.
+ * @invariant Filters by uid — votes from other accounts on the same device are excluded.
+ * @param {string} uid
  * @param {string} spaceId
  * @returns {Promise<Record<string, number>>}
  */
-export async function dbGetVotes(spaceId) {
+export async function dbGetVotes(uid, spaceId) {
   const db = await getDB()
   const idx = db.transaction('votes').store.index('bySpace')
   const rows = await idx.getAll(spaceId)
   const map = {}
-  rows.forEach(r => { map[r.name] = r.score })
+  rows.forEach(r => { if (r.uid === uid) map[r.name] = r.score })
   return map
 }
 
 /**
- * @purpose Return votes for a space sorted by vote time, plus the raw ordered array.
+ * @purpose Return one user's votes for a space sorted by vote time, plus the raw ordered array.
+ * @param {string} uid
  * @param {string} spaceId
  * @returns {Promise<{map: Record<string, number>, ordered: object[]}>}
- *   `ordered` is sorted oldest-first; used by HistoryView to reconstruct the vote sequence.
+ *   `ordered` is sorted oldest-first; used by VotingView to reconstruct the vote sequence.
  */
-export async function dbGetVotesOrdered(spaceId) {
+export async function dbGetVotesOrdered(uid, spaceId) {
   const db = await getDB()
   const idx = db.transaction('votes').store.index('bySpace')
-  const rows = await idx.getAll(spaceId)
+  const rows = (await idx.getAll(spaceId)).filter(r => r.uid === uid)
   rows.sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0))
   const map = {}
   rows.forEach(r => { map[r.name] = r.score })
@@ -116,14 +127,15 @@ export async function dbGetVotesOrdered(spaceId) {
 }
 
 /**
- * @purpose Delete a single vote record from IndexedDB.
+ * @purpose Delete a single user's vote record from IndexedDB.
+ * @param {string} uid
  * @param {string} spaceId
  * @param {string} name
  * @sideEffect IDB delete from 'votes' store.
  */
-export async function dbDeleteVote(spaceId, name) {
+export async function dbDeleteVote(uid, spaceId, name) {
   const db = await getDB()
-  await db.delete('votes', `${spaceId}::${name}`)
+  await db.delete('votes', `${uid}::${spaceId}::${name}`)
 }
 
 /**

@@ -16,7 +16,7 @@ app.mount('#app')
 if (['localhost', '127.0.0.1'].includes(location.hostname)) {
   window.__e2e = {
     get state() { return { user: currentUser.value } },
-    getVotes: (sid) => dbGetVotes(sid),
+    getVotes: (sid) => dbGetVotes(currentUser.value?.uid, sid),
     getOutbox: async () => { const db = await getDB(); return db.getAll('outbox') },
     getSpaces: (uid) => dbGetMySpaces(uid),
     blockSync: (v) => { window._blockSync = v },

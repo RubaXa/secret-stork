@@ -241,6 +241,25 @@ test.describe('Voting UX', () => {
     await page.evaluate(() => window.__e2e.blockSync(true))
   }
 
+  test('votes are scoped per user (no leak across accounts in one browser)', async ({ page }) => {
+    // User 1 creates a space and votes on 2 names
+    await goToVoting(page)
+    const spaceId = await getSpaceId(page)
+    await page.locator('.r-btn').nth(4).click()
+    await page.waitForTimeout(450)
+    await page.locator('.r-btn').nth(4).click()
+    await page.waitForTimeout(450)
+    expect(Object.keys(await getIDBVotes(page, spaceId))).toHaveLength(2)
+
+    // User 2 opens the SAME space in the SAME browser (shared IndexedDB).
+    // They must NOT inherit user 1's votes, nor land on the "done" screen.
+    await page.goto(`${BASE}/?e2e_user=${FAKE_USER_2}#/space/${spaceId}`)
+    await page.waitForSelector('.card-current .card-name, .done-view')
+    await page.waitForTimeout(300)
+    expect(Object.keys(await getIDBVotes(page, spaceId))).toHaveLength(0)
+    await expect(page.locator('.done-view')).toHaveCount(0)
+  })
+
   test('rating tap instantly advances (no confirm button)', async ({ page }) => {
     await goToVoting(page)
     await expect(page.locator('#btn-next')).toHaveCount(0) // legacy mechanic: no "Далее" button

@@ -30,6 +30,7 @@ import { useRoute, useRouter } from 'vue-router'
 import NavBar from '@/components/NavBar.vue'
 import { dbGetSpace, dbGetVotes, dbDeleteVote } from '@/services/db.js'
 import { loadNames, getNamesByGroups, getNames } from '@/services/names.js'
+import { currentUser } from '@/composables/useAuth.js'
 import { RATINGS, clampScore } from '@/utils.js'
 
 const route = useRoute()
@@ -54,11 +55,11 @@ onMounted(async () => {
   await loadNames()
   space.value = await dbGetSpace(spaceId)
   if (!space.value) { router.replace('/'); return }
-  votesMap.value = await dbGetVotes(spaceId)
+  votesMap.value = await dbGetVotes(currentUser.value.uid, spaceId)
 })
 
 async function revote(name) {
-  await dbDeleteVote(spaceId, name)
+  await dbDeleteVote(currentUser.value.uid, spaceId, name)
   router.push(`/space/${spaceId}`)
 }
 </script>
