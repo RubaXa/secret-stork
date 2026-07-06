@@ -189,20 +189,32 @@ export async function syncSpacesFromFirestore(uid) {
   // #endregion END_SYNC_DELETED_DETECTION
 
   // #region START_SYNC_VOTE_PROGRESS
-  // purpose: keep _progress counters accurate so HomeView can show per-space completion percentages
+  // purpose: keep _progress (own completion) and _memberCount (participants) fresh so HomeView cards
+  //   show real numbers. Without the member fetch the "Мои голосования" card renders "👥 ?", because
+  //   _memberCount was previously only ever computed inside AdminView when the organizer opened it.
   try {
     const allSpaces = await dbGetMySpaces(uid)
     for (const space of allSpaces) {
       try {
+        let changed = false
+
+        // own vote progress
         const vSnap = await getDoc(doc(fbDb, 'spaces', space.id, 'votes', uid))
         if (vSnap.exists()) {
           const count = Object.keys(vSnap.data().votes || {}).length
-          if (count !== (space._progress || 0)) {
-            space._progress = count
-            await dbSaveSpace(space)
-            hadNew = true
-          }
+          if (count !== (space._progress || 0)) { space._progress = count; changed = true }
         }
+
+        // participant count — only the creator may list the members subcollection (Firestore rules),
+        // and 👥 is only shown on their own cards. Count matches AdminView: members + creator-if-absent.
+        if (space.creatorUid === uid) {
+          const mSnap = await getDocs(collection(fbDb, 'spaces', space.id, 'members'))
+          const hasCreator = mSnap.docs.some(d => d.id === uid)
+          const memberCount = mSnap.size + (hasCreator ? 0 : 1)
+          if (memberCount !== space._memberCount) { space._memberCount = memberCount; changed = true }
+        }
+
+        if (changed) { await dbSaveSpace(space); hadNew = true }
       } catch (e) { L('sync#fetch', 'progress error id=' + space.id.slice(0, 8), e.message) }
     }
   } catch (e) { L('sync#fetch', 'step3 error', e.message) }
