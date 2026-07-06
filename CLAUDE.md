@@ -54,4 +54,4 @@ GitHub Pages настроен на ветку `gh-pages`, папка `/ (root)`.
 npm run build && npx playwright test --config=playwright.config.js
 ```
 
-22/22 должны быть зелёными.
+23/23 должны быть зелёными.

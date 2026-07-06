@@ -37,14 +37,19 @@ router.beforeEach(async (to) => {
   // #endregion END_UNAUTHENTICATED_REDIRECT
 
   // #region START_POST_LOGIN_REDIRECT
-  // purpose: restore the deep-link the user originally tried to visit before being forced to /login
-  if (to.path === '/login' && currentUser.value) {
+  // purpose: restore the deep-link the user originally tried to visit before being forced to sign in.
+  // @invariant Must fire when the user lands on '/' too, not only '/login'. On mobile, Google sign-in
+  //   reloads the whole page and the hash resets to root, so an invited user comes back on '/' — if we
+  //   only restored from '/login', the saved link was silently dropped and they landed on an empty home
+  //   (never reaching the vote, never joining, never showing up for the organizer). This was THE bug.
+  if (currentUser.value && (to.path === '/login' || to.path === '/')) {
     const pending = sessionStorage.getItem('pendingRoute')
     if (pending) {
       sessionStorage.removeItem('pendingRoute')
-      return pending.replace(/^#/, '') || '/'
+      const target = pending.replace(/^#/, '') || '/'
+      if (target !== to.fullPath) return target
     }
-    return '/'
+    if (to.path === '/login') return '/'
   }
   // #endregion END_POST_LOGIN_REDIRECT
 })

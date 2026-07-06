@@ -423,4 +423,23 @@ test.describe('Deep link joining', () => {
     expect(saved).toBe('#/space/abc123xyz')
   })
 
+  test('saved deep link is restored even when auth drops the user on home', async ({ page }) => {
+    // Create a space (this is the link that gets shared).
+    await page.goto(appUrl())
+    await page.locator('.home-create').click()
+    await page.locator('#inp-title').fill('Deep Link')
+    await page.locator('#btn-create').click()
+    await page.waitForURL(/.*#\/space\//)
+    const spaceId = await getSpaceId(page)
+
+    // Reproduce the post-sign-in state on mobile: a pending deep link is saved, but the OAuth
+    // page-reload lands the user on '/' (home), not '/login'.
+    await page.evaluate(id => sessionStorage.setItem('pendingRoute', '#/space/' + id), spaceId)
+    await page.goto(appUrl('/'))
+
+    // The guard must carry them to the vote they were invited to — not leave them on an empty home.
+    await page.waitForURL(new RegExp(`#/space/${spaceId}`))
+    await expect(page.locator('.voting-view, .done-view')).toHaveCount(1)
+  })
+
 })
