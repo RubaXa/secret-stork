@@ -51,7 +51,14 @@ GitHub Pages настроен на ветку `gh-pages`, папка `/ (root)`.
 ## Тесты перед деплоем
 
 ```bash
-npm run build && npx playwright test --config=playwright.config.js
+npm run verify
 ```
 
-23/23 должны быть зелёными.
+Гоняет build + 133 unit-теста (Vitest) + 30 E2E (Playwright, `roulette.spec.js` + `flows.spec.js`).
+Всё должно быть зелёным. `npm run coverage` — метрика покрытия строк (сейчас ~37%, growing).
+
+**Freeze-baseline:** тег `v1-tested-baseline` — состояние с полным тестовым покрытием
+существующей функциональности, ДО начала архитектурного рефакторинга (доменный слой,
+устранение денормализованных `_progress`/`_memberCount`/`_avgProgress`). Любой последующий
+рефакторинг должен держать `npm run verify` зелёным на каждом шаге; для сравнения поведения —
+`git diff v1-tested-baseline`.

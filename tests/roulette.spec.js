@@ -24,10 +24,14 @@ const FAKE_USER_2 = Buffer.from(JSON.stringify({
   photoURL: null,
 })).toString('base64')
 
+// @invariant e2e_user MUST be percent-encoded: base64 can contain '+', which a URL query string
+//   decodes to a space, corrupting atob() in getE2EUser() → fake auth silently fails (login screen
+//   shows instead). These particular FAKE_USER strings happen not to contain '+', so this was
+//   working by luck — encodeURIComponent removes the luck dependency.
 function appUrl(hash = '') {
   // strip a leading '#' so callers can pass either '#/path' or '/path'
   const h = hash.startsWith('#') ? hash.slice(1) : hash
-  return `${BASE}/?e2e_user=${FAKE_USER}${h ? '#' + h : ''}`
+  return `${BASE}/?e2e_user=${encodeURIComponent(FAKE_USER)}${h ? '#' + h : ''}`
 }
 
 // Helper: read IDB votes for a space
@@ -253,7 +257,7 @@ test.describe('Voting UX', () => {
 
     // User 2 opens the SAME space in the SAME browser (shared IndexedDB).
     // They must NOT inherit user 1's votes, nor land on the "done" screen.
-    await page.goto(`${BASE}/?e2e_user=${FAKE_USER_2}#/space/${spaceId}`)
+    await page.goto(`${BASE}/?e2e_user=${encodeURIComponent(FAKE_USER_2)}#/space/${spaceId}`)
     await page.waitForSelector('.card-current .card-name, .done-view')
     await page.waitForTimeout(300)
     expect(Object.keys(await getIDBVotes(page, spaceId))).toHaveLength(0)
