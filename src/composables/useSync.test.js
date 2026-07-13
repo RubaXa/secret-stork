@@ -7,14 +7,17 @@ vi.mock('@/services/sync.js', () => ({
   syncSpacesFromFirestore: vi.fn(),
 }))
 
-import { drain, syncHome, resetSyncTimer, syncStatus, pendingCount } from './useSync.js'
+import { drain, syncHome, resetSyncTimer, resetDrainFailureTracking, syncStatus, pendingCount } from './useSync.js'
 import { drainOutbox, syncSpacesFromFirestore } from '@/services/sync.js'
+import { toasts } from './useToast.js'
 
 beforeEach(() => {
   vi.clearAllMocks()
   resetSyncTimer()
+  resetDrainFailureTracking()
   syncStatus.value = 'ok'
   pendingCount.value = 0
+  toasts.value = []
 })
 
 describe('drain — status mapping', () => {
@@ -43,6 +46,48 @@ describe('drain — status mapping', () => {
     drainOutbox.mockResolvedValue({ status: 'no-user', remaining: 0 })
     await drain()
     expect(syncStatus.value).toBe('ok')
+  })
+
+  it('pending (held-for-another-uid entries, not a real failure) does not count towards the failure toast', async () => {
+    drainOutbox.mockResolvedValue({ status: 'ok', remaining: 2 })
+    await drain(); await drain(); await drain()
+    expect(toasts.value).toHaveLength(0)
+  })
+})
+
+describe('drain — persistent-failure toast', () => {
+  it('does NOT toast on a single failed drain (avoids spamming on a one-off blip)', async () => {
+    drainOutbox.mockResolvedValue({ status: 'error', remaining: 1 })
+    await drain()
+    await drain()
+    expect(toasts.value).toHaveLength(0) // below PERSISTENT_FAILURE_THRESHOLD (3)
+  })
+
+  it('toasts once the failure persists across 3 consecutive drains', async () => {
+    drainOutbox.mockResolvedValue({ status: 'error', remaining: 1 })
+    await drain(); await drain(); await drain()
+    expect(toasts.value).toHaveLength(1)
+    expect(toasts.value[0].type).toBe('error')
+  })
+
+  it('does not toast again on further consecutive failures (warns only once)', async () => {
+    drainOutbox.mockResolvedValue({ status: 'error', remaining: 1 })
+    await drain(); await drain(); await drain(); await drain(); await drain()
+    expect(toasts.value).toHaveLength(1)
+  })
+
+  it('recovering to ok resets the counter — a later failure streak toasts again', async () => {
+    drainOutbox.mockResolvedValue({ status: 'error', remaining: 1 })
+    await drain(); await drain(); await drain()
+    expect(toasts.value).toHaveLength(1)
+
+    drainOutbox.mockResolvedValue({ status: 'ok', remaining: 0 })
+    await drain() // recovers — resets the consecutive-error counter and the warned flag
+
+    toasts.value = [] // clear so the next assertion is unambiguous
+    drainOutbox.mockResolvedValue({ status: 'error', remaining: 1 })
+    await drain(); await drain(); await drain()
+    expect(toasts.value).toHaveLength(1) // warns again for the NEW failure streak
   })
 })
 

@@ -31,7 +31,10 @@
               <div class="m-bar"><div class="m-bar-fill" :style="{ width: progressPct(m.uid) + '%' }"></div></div>
             </div>
           </div>
-          <p v-if="!members.length" style="color:var(--t2);font-size:14px;padding:8px 0">Пока нет участников. Поделитесь ссылкой!</p>
+          <p v-if="loadError" style="color:var(--danger,#e53935);font-size:14px;padding:8px 0">
+            Не удалось загрузить участников. Проверьте соединение и обновите страницу.
+          </p>
+          <p v-else-if="!members.length" style="color:var(--t2);font-size:14px;padding:8px 0">Пока нет участников. Поделитесь ссылкой!</p>
         </template>
       </div>
 
@@ -55,6 +58,7 @@ import { fbDb, doc, getDocs, collection, serverTimestamp } from '@/firebase/conf
 import { getE2EUser } from '@/services/auth.js'
 import { spaceUrl, initials } from '@/utils.js'
 import { toast } from '@/composables/useToast.js'
+import { L } from '@/services/logger.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -64,6 +68,10 @@ const space = ref(null)
 const members = ref([])
 const progressMap = ref({})
 const loadingMembers = ref(true)
+// @purpose Distinguishes "couldn't read members/votes" (Firestore/network failure) from "zero
+//   members joined yet" — both previously rendered as the same cheerful "share the link" message,
+//   which silently hid real sync failures from the organizer (they'd think nobody had joined).
+const loadError = ref(false)
 
 const user = currentUser
 const isClosed = computed(() => space.value?.status === 'closed')
@@ -101,7 +109,10 @@ onMounted(async () => {
       ? (list.reduce((s, m) => s + (pm[m.uid] || 0), 0) / list.length / total) * 100
       : 0
     await dbSaveSpace(space.value)
-  } catch (_) {}
+  } catch (e) {
+    loadError.value = true
+    L('admin#members', 'load error', e.message)
+  }
   loadingMembers.value = false
 })
 
