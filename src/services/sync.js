@@ -37,11 +37,26 @@ export async function drainOutbox() {
   L('sync#drain', 'start uid=' + safeUid(_user.uid))
   try {
     const db = await getDB()
-    const entries = await db.getAll('outbox')
-    if (!entries.length) {
+    const allEntries = await db.getAll('outbox')
+    if (!allEntries.length) {
       L('sync#drain', 'outbox empty')
       return { status: 'ok', remaining: 0 }
     }
+
+    // #region START_UID_SCOPE_FILTER
+    // @invariant Only entries queued by the CURRENTLY signed-in user are drained. VOTE/MEMBER_JOIN/
+    //   USER_SPACE_LINK all write to a `.../{uid}` Firestore path; without this filter, an entry
+    //   queued under one account and drained after switching accounts on the same device (two
+    //   accounts, one browser) would be written under the WRONG uid, corrupting Firestore data even
+    //   though the local IDB vote store is already uid-scoped. Entries from another account are held
+    //   untouched — they drain next time that account signs in. Legacy entries with no `uid` field
+    //   (queued before this fix shipped) are treated as belonging to whoever is signed in now, which
+    //   preserves the old behavior for anything already sitting in a user's outbox.
+    const entries = allEntries.filter(e => e.uid === undefined || e.uid === _user.uid)
+    const heldCount = allEntries.length - entries.length
+    if (heldCount) L('sync#drain', 'held (other uid) count=' + heldCount)
+    if (!entries.length) return { status: 'ok', remaining: heldCount }
+    // #endregion END_UID_SCOPE_FILTER
 
     // #region START_VOTE_BATCH_COLLECTION
     // purpose: merge multiple VOTE entries for the same space into one Firestore write to reduce write ops
@@ -103,9 +118,10 @@ export async function drainOutbox() {
 
     // #region START_OUTBOX_CLEANUP
     await Promise.all(done.map(id => db.delete('outbox', id)))
-    const remaining = entries.length - done.length
-    L('sync#drain', 'done remaining=' + remaining)
-    return { status: remaining ? 'error' : 'ok', remaining }
+    const failed = entries.length - done.length
+    const remaining = failed + heldCount // held-for-another-uid entries are not failures, just deferred
+    L('sync#drain', 'done failed=' + failed + ' held=' + heldCount)
+    return { status: failed ? 'error' : 'ok', remaining }
     // #endregion END_OUTBOX_CLEANUP
 
   } finally {

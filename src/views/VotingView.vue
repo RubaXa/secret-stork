@@ -222,10 +222,10 @@ onMounted(async () => {
         if (!sp.joinedUids.includes(user.value.uid)) sp.joinedUids.push(user.value.uid)
         await dbSaveSpace(sp)
         await dbAddOutbox({
-          type: 'MEMBER_JOIN', spaceId,
+          type: 'MEMBER_JOIN', spaceId, uid: user.value.uid,
           data: { displayName: user.value.displayName, photoURL: user.value.photoURL, joinedAt: serverTimestamp(), progress: 0 },
         })
-        await dbAddOutbox({ type: 'USER_SPACE_LINK', spaceId })
+        await dbAddOutbox({ type: 'USER_SPACE_LINK', spaceId, uid: user.value.uid })
         drain()
       }
     } catch (_) {}

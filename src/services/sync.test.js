@@ -166,19 +166,45 @@ describe('drainOutbox — VOTE batching', () => {
     expect((await outboxAll()).length).toBe(0)
   })
 
-  it('writes votes under _user.uid and IGNORES any uid field carried on the outbox entry (FINDING)', async () => {
-    // FINDING: dbAddOutbox stores whatever fields the caller passes, including a `uid`. drainOutbox's
-    // VOTE batch path targets doc(..., 'votes', _user.uid) and never reads entry.uid. So a VOTE queued
-    // with a different uid is written under the CURRENT signed-in user's uid. This test pins that behavior.
+  it('HOLDS a VOTE queued under a different uid — does NOT write it under the current user', async () => {
+    // Two accounts, one browser: a vote queued while 'SOME-OTHER-UID' was signed in must not be
+    // written under the CURRENTLY signed-in user's Firestore doc when drain runs later.
     setSyncUser({ uid: UID })
     await dbAddOutbox({ type: 'VOTE', spaceId: 'space-1', name: 'Alice', score: 5, uid: 'SOME-OTHER-UID' })
 
-    await drainOutbox()
+    const res = await drainOutbox()
+
+    expect(setDoc).not.toHaveBeenCalled()
+    expect(res).toEqual({ status: 'ok', remaining: 1 }) // held, not an error — just deferred
+    expect((await outboxAll())).toHaveLength(1) // still queued, untouched
+  })
+
+  it('drains only the current uid\'s votes; the other uid\'s entry stays queued', async () => {
+    setSyncUser({ uid: UID })
+    await dbAddOutbox({ type: 'VOTE', spaceId: 'space-1', name: 'Mine', score: 4, uid: UID })
+    await dbAddOutbox({ type: 'VOTE', spaceId: 'space-1', name: 'TheirsNotMine', score: 1, uid: 'OTHER-UID' })
+
+    const res = await drainOutbox()
+
+    expect(setDoc).toHaveBeenCalledTimes(1)
+    const [, payload] = setDoc.mock.calls[0]
+    expect(payload.votes).toEqual({ Mine: 4 })
+    expect(res).toEqual({ status: 'ok', remaining: 1 })
+    const left = await outboxAll()
+    expect(left).toHaveLength(1)
+    expect(left[0].name).toBe('TheirsNotMine')
+  })
+
+  it('legacy VOTE entries with no uid field (queued before uid-scoping shipped) still drain under the signed-in user', async () => {
+    setSyncUser({ uid: UID })
+    await dbAddOutbox({ type: 'VOTE', spaceId: 'space-1', name: 'Legacy', score: 3 }) // no `uid` field
+
+    const res = await drainOutbox()
 
     expect(setDoc).toHaveBeenCalledTimes(1)
     const [ref] = setDoc.mock.calls[0]
     expect(ref.__path).toBe(`spaces/space-1/votes/${UID}`)
-    expect(ref.__path).not.toContain('SOME-OTHER-UID')
+    expect(res).toEqual({ status: 'ok', remaining: 0 })
   })
 
   it('batches per-space: two spaces produce two separate setDoc writes', async () => {
@@ -268,6 +294,26 @@ describe('drainOutbox — mixed / other event types', () => {
     expect(call[0].__path).toBe(`users/${UID}/spaces/link-1`)
     expect(call[1]).toEqual({ at: '__ts__' })
     expect(call[2]).toEqual({ merge: true })
+  })
+
+  it('MEMBER_JOIN queued under a different uid is held, not written under the current user', async () => {
+    setSyncUser({ uid: UID })
+    await dbAddOutbox({ type: 'MEMBER_JOIN', spaceId: 'mj-2', uid: 'OTHER-UID', data: { name: 'Someone Else' } })
+
+    const res = await drainOutbox()
+
+    expect(setDoc).not.toHaveBeenCalled()
+    expect(res).toEqual({ status: 'ok', remaining: 1 })
+  })
+
+  it('USER_SPACE_LINK queued under a different uid is held, not written under the current user', async () => {
+    setSyncUser({ uid: UID })
+    await dbAddOutbox({ type: 'USER_SPACE_LINK', spaceId: 'link-2', uid: 'OTHER-UID' })
+
+    const res = await drainOutbox()
+
+    expect(setDoc).not.toHaveBeenCalled()
+    expect(res).toEqual({ status: 'ok', remaining: 1 })
   })
 
   it('unknown event type is DROPPED (marked done, removed from outbox) not retried', async () => {
