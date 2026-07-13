@@ -6,9 +6,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const getE2EUser = vi.fn()
 const onAuthStateChanged = vi.fn()
+const completeRedirectSignIn = vi.fn()
 const setSyncUser = vi.fn()
 
-vi.mock('@/services/auth.js', () => ({ getE2EUser, onAuthStateChanged }))
+vi.mock('@/services/auth.js', () => ({ getE2EUser, onAuthStateChanged, completeRedirectSignIn }))
 vi.mock('@/services/sync.js', () => ({ setSyncUser }))
 // logger.js has no Firebase import, but mock it to keep console quiet + deterministic.
 vi.mock('@/services/logger.js', () => ({ L: vi.fn(), safeUid: uid => uid ? uid.slice(0, 8) : 'none' }))
@@ -24,8 +25,10 @@ async function freshModule() {
 beforeEach(() => {
   getE2EUser.mockReset()
   onAuthStateChanged.mockReset()
+  completeRedirectSignIn.mockReset()
   setSyncUser.mockReset()
   getE2EUser.mockReturnValue(null)
+  completeRedirectSignIn.mockResolvedValue(undefined)
 })
 
 describe('initAuth — E2E-user path', () => {
@@ -41,6 +44,8 @@ describe('initAuth — E2E-user path', () => {
     expect(m.authReady.value).toBe(true)
     expect(setSyncUser).toHaveBeenCalledWith(e2eUser)
     expect(onAuthStateChanged).not.toHaveBeenCalled()
+    // E2E mode bypasses Firebase entirely — no redirect round-trip to complete either.
+    expect(completeRedirectSignIn).not.toHaveBeenCalled()
   })
 })
 
@@ -53,6 +58,12 @@ describe('initAuth — Firebase path', () => {
     expect(onAuthStateChanged).toHaveBeenCalledTimes(1)
     expect(m.authReady.value).toBe(false)
     expect(m.currentUser.value).toBeNull()
+  })
+
+  it('completes any pending signInWithRedirect() round-trip on startup', async () => {
+    const m = await freshModule()
+    m.initAuth()
+    expect(completeRedirectSignIn).toHaveBeenCalledTimes(1)
   })
 
   it('sets currentUser + authReady when the auth callback fires with a user', async () => {

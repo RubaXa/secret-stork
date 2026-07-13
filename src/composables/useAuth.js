@@ -2,7 +2,7 @@
 // @consumers: router/index.js, App.vue, views (currentUser), services/sync.js (via setSyncUser)
 
 import { ref, watch } from 'vue'
-import { onAuthStateChanged, getE2EUser } from '@/services/auth.js'
+import { onAuthStateChanged, getE2EUser, completeRedirectSignIn } from '@/services/auth.js'
 import { setSyncUser } from '@/services/sync.js'
 import { L, safeUid } from '@/services/logger.js'
 
@@ -34,6 +34,12 @@ export function initAuth() {
     return
   }
   // #endregion END_E2E_AUTH_BYPASS
+
+  // @invariant Fire-and-forget: completes a signInWithRedirect() round-trip if one is pending (see
+  //   services/auth.js). Not awaited — onAuthStateChanged below is the actual source of truth for
+  //   currentUser/authReady and fires regardless of whether a redirect was involved; this call only
+  //   exists to surface redirect-specific errors to the log.
+  completeRedirectSignIn()
 
   onAuthStateChanged(user => {
     L('auth', 'state change uid=' + safeUid(user?.uid))

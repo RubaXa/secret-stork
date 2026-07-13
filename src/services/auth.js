@@ -2,21 +2,55 @@
 // @consumers: composables/useAuth.js
 
 import { L } from './logger.js'
-import { fbAuth, gProvider, signInWithPopup, fbSignOut, onAuthStateChanged as _onAuthStateChanged } from '@/firebase/config.js'
+import { fbAuth, gProvider, signInWithPopup, signInWithRedirect, getRedirectResult, fbSignOut, onAuthStateChanged as _onAuthStateChanged } from '@/firebase/config.js'
+
+// @invariant Codes meaning the popup literally could not open (blocked, or the environment doesn't
+//   support window.open at all — e.g. an in-app browser inside a messenger app). These are the ONLY
+//   codes that fall back to redirect; anything else (e.g. the user closing the popup) must not.
+const POPUP_UNAVAILABLE_CODES = new Set([
+  'auth/popup-blocked',
+  'auth/operation-not-supported-in-this-environment',
+])
 
 /**
- * @purpose Trigger Google sign-in popup and authenticate with Firebase.
+ * @purpose Trigger Google sign-in: popup first, falling back to a full-page redirect when the
+ *   popup itself could not open (mobile browsers and in-app messenger WebViews commonly block it —
+ *   this was the likely #1 reason invited participants could never sign in and join a space).
+ * @invariant On redirect fallback, signInWithRedirect() navigates the page away — nothing after
+ *   that call runs in this session. The App.vue render-gate means the URL the user was on (e.g. a
+ *   shared #/space/xyz link) is preserved through the whole round-trip; see completeRedirectSignIn.
  * @throws {Error} Re-throws all Firebase auth errors except auth/popup-closed-by-user (user cancel).
- * @sideEffect Network: Firebase OAuth popup; updates Firebase auth state.
+ * @sideEffect Network: Firebase OAuth popup or full-page redirect; updates Firebase auth state.
  */
 export async function signIn() {
-  L('auth', 'signIn attempt')
+  L('auth', 'signIn attempt (popup)')
   try {
     await signInWithPopup(fbAuth, gProvider)
-    L('auth', 'signIn success')
+    L('auth', 'signIn success (popup)')
   } catch (e) {
-    L('auth', 'signIn error', e.code, e.message)
-    if (e.code !== 'auth/popup-closed-by-user') throw e
+    L('auth', 'signIn popup error', e.code, e.message)
+    if (e.code === 'auth/popup-closed-by-user') return
+    if (POPUP_UNAVAILABLE_CODES.has(e.code)) {
+      L('auth', 'popup unavailable, falling back to redirect')
+      await signInWithRedirect(fbAuth, gProvider)
+      return
+    }
+    throw e
+  }
+}
+
+/**
+ * @purpose Complete a signInWithRedirect() round-trip after the page reloads. Call once at startup.
+ * @invariant Must never throw or hang startup — a stale/absent redirect result (the common case,
+ *   since most sign-ins are via popup) resolves to null and this is a no-op.
+ * @sideEffect Network: reads any pending Firebase redirect result.
+ */
+export async function completeRedirectSignIn() {
+  try {
+    const result = await getRedirectResult(fbAuth)
+    if (result?.user) L('auth', 'signIn success (redirect)')
+  } catch (e) {
+    L('auth', 'redirect result error', e.code, e.message)
   }
 }
 

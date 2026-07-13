@@ -7,6 +7,8 @@ vi.mock('@/firebase/config.js', () => ({
   fbAuth: {},
   gProvider: {},
   signInWithPopup: vi.fn(),
+  signInWithRedirect: vi.fn(),
+  getRedirectResult: vi.fn(),
   fbSignOut: vi.fn(),
   onAuthStateChanged: vi.fn(),
   fbDb: {},
@@ -22,9 +24,11 @@ vi.mock('@/firebase/config.js', () => ({
   where: vi.fn(),
 }))
 
-import { signIn, signOut, onAuthStateChanged, getE2EUser } from './auth.js'
+import { signIn, signOut, onAuthStateChanged, getE2EUser, completeRedirectSignIn } from './auth.js'
 import {
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   fbSignOut,
   fbAuth,
   gProvider,
@@ -89,6 +93,47 @@ describe('signIn', () => {
     const err = Object.assign(new Error('network'), { code: 'auth/network-request-failed' })
     signInWithPopup.mockRejectedValue(err)
     await expect(signIn()).rejects.toBe(err)
+    expect(signInWithRedirect).not.toHaveBeenCalled()
+  })
+
+  // Mobile browsers and in-app messenger WebViews (how a shared link is actually opened) commonly
+  // block window.open, so signInWithPopup fails with one of these codes — this is the likely #1
+  // reason invited participants could never sign in and join a space.
+  it.each([
+    'auth/popup-blocked',
+    'auth/operation-not-supported-in-this-environment',
+  ])('falls back to signInWithRedirect when popup is unavailable (%s)', async (code) => {
+    const err = Object.assign(new Error('no popup'), { code })
+    signInWithPopup.mockRejectedValue(err)
+    signInWithRedirect.mockResolvedValue(undefined)
+
+    await expect(signIn()).resolves.toBeUndefined()
+
+    expect(signInWithRedirect).toHaveBeenCalledWith(fbAuth, gProvider)
+  })
+
+  it('does NOT fall back to redirect when the user simply closes the popup', async () => {
+    const err = Object.assign(new Error('closed'), { code: 'auth/popup-closed-by-user' })
+    signInWithPopup.mockRejectedValue(err)
+    await signIn()
+    expect(signInWithRedirect).not.toHaveBeenCalled()
+  })
+})
+
+describe('completeRedirectSignIn', () => {
+  it('resolves silently when there is no pending redirect (the common case — most sign-ins are via popup)', async () => {
+    getRedirectResult.mockResolvedValue(null)
+    await expect(completeRedirectSignIn()).resolves.toBeUndefined()
+  })
+
+  it('resolves when a redirect sign-in completed with a user', async () => {
+    getRedirectResult.mockResolvedValue({ user: { uid: 'redirected-in' } })
+    await expect(completeRedirectSignIn()).resolves.toBeUndefined()
+  })
+
+  it('never throws — a redirect-result error is caught, not propagated (must not hang app startup)', async () => {
+    getRedirectResult.mockRejectedValue(Object.assign(new Error('boom'), { code: 'auth/some-error' }))
+    await expect(completeRedirectSignIn()).resolves.toBeUndefined()
   })
 })
 

@@ -1,7 +1,7 @@
 // Firebase SDK via CDN (not npm) — required for GitHub Pages static hosting without a server-side bundler.
 // Firestore region: europe-west3. Authorized domain: rubaxa.github.io (Firebase console → Authentication → Settings).
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js'
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as fbSignOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js'
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut as fbSignOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js'
 import { getFirestore, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, collection, onSnapshot, serverTimestamp, query, where } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'
 
 const FB_CONFIG = {
@@ -19,7 +19,7 @@ export const fbDb = getFirestore(fbApp)
 export const gProvider = new GoogleAuthProvider()
 
 export {
-  signInWithPopup, fbSignOut, onAuthStateChanged,
+  signInWithPopup, signInWithRedirect, getRedirectResult, fbSignOut, onAuthStateChanged,
   doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc,
   collection, onSnapshot, serverTimestamp, query, where,
 }
