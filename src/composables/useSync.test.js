@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // useSync delegates to services/sync.js — mock it so we test the composable's own logic
 // (status mapping + 30s throttle) without touching Firebase/IDB.
@@ -7,7 +7,7 @@ vi.mock('@/services/sync.js', () => ({
   syncSpacesFromFirestore: vi.fn(),
 }))
 
-import { drain, syncHome, resetSyncTimer, resetDrainFailureTracking, syncStatus, pendingCount } from './useSync.js'
+import { drain, syncHome, resetSyncTimer, resetDrainFailureTracking, startPeriodicDrain, stopPeriodicDrain, syncStatus, pendingCount } from './useSync.js'
 import { drainOutbox, syncSpacesFromFirestore } from '@/services/sync.js'
 import { toasts } from './useToast.js'
 
@@ -15,6 +15,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   resetSyncTimer()
   resetDrainFailureTracking()
+  stopPeriodicDrain() // in case a previous test left a timer running
   syncStatus.value = 'ok'
   pendingCount.value = 0
   toasts.value = []
@@ -105,5 +106,43 @@ describe('syncHome — 30s throttle', () => {
     resetSyncTimer()
     await syncHome('u1')
     expect(syncSpacesFromFirestore).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('startPeriodicDrain / stopPeriodicDrain', () => {
+  beforeEach(() => { vi.useFakeTimers() })
+  afterEach(() => { stopPeriodicDrain(); vi.useRealTimers() })
+
+  it('retries a stuck outbox on its own, without any new user action', async () => {
+    drainOutbox.mockResolvedValue({ status: 'error', remaining: 1 })
+    startPeriodicDrain()
+
+    expect(drainOutbox).not.toHaveBeenCalled() // no drain yet — timer hasn't fired
+
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(drainOutbox).toHaveBeenCalledTimes(1) // fired on its own — no vote/foreground/online event
+
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(drainOutbox).toHaveBeenCalledTimes(2) // keeps retrying
+  })
+
+  it('is idempotent — calling it twice does not start a second timer', async () => {
+    drainOutbox.mockResolvedValue({ status: 'ok', remaining: 0 })
+    startPeriodicDrain()
+    startPeriodicDrain()
+
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(drainOutbox).toHaveBeenCalledTimes(1) // would be 2 if a second timer had started
+  })
+
+  it('stopPeriodicDrain halts future retries', async () => {
+    drainOutbox.mockResolvedValue({ status: 'ok', remaining: 0 })
+    startPeriodicDrain()
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(drainOutbox).toHaveBeenCalledTimes(1)
+
+    stopPeriodicDrain()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(drainOutbox).toHaveBeenCalledTimes(1) // no further calls after stop
   })
 })

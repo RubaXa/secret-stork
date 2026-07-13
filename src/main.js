@@ -2,11 +2,12 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router/index.js'
 import { initAuth, currentUser } from './composables/useAuth.js'
-import { drain } from './composables/useSync.js'
+import { drain, startPeriodicDrain } from './composables/useSync.js'
 import { dbGetVotes, dbGetMySpaces, getDB } from './services/db.js'
 import './style.css'
 
 initAuth()
+startPeriodicDrain() // retries a stuck outbox entry without waiting for the user to trigger drain again
 
 const app = createApp(App)
 app.use(router)

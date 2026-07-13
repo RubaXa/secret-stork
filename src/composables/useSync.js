@@ -58,6 +58,32 @@ export function resetDrainFailureTracking() {
   _warned = false
 }
 
+const DRAIN_RETRY_INTERVAL = 30_000
+let _drainIntervalId = null
+
+/**
+ * @purpose Periodically retry draining the outbox so a transient failure (an invitee's vote/join
+ *   that couldn't reach Firestore on the first attempt) doesn't get stuck until the user happens
+ *   to trigger another drain themselves (voting again, foregrounding the tab, coming back online).
+ * @invariant Idempotent — a second call while already running does not start a second timer.
+ * @sideEffect Starts a repeating timer that calls drain() every DRAIN_RETRY_INTERVAL.
+ */
+export function startPeriodicDrain() {
+  if (_drainIntervalId !== null) return
+  _drainIntervalId = setInterval(drain, DRAIN_RETRY_INTERVAL)
+}
+
+/**
+ * @purpose Stop the periodic drain retry timer. Exposed for tests/cleanup.
+ * @sideEffect Clears the interval started by startPeriodicDrain(), if any.
+ */
+export function stopPeriodicDrain() {
+  if (_drainIntervalId !== null) {
+    clearInterval(_drainIntervalId)
+    _drainIntervalId = null
+  }
+}
+
 const HOME_SYNC_INTERVAL = 30_000
 let _lastSync = 0
 
