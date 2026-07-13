@@ -100,7 +100,12 @@ export async function drainOutbox() {
         } else if (entry.type === 'SPACE_UPDATE') {
           await updateDoc(doc(fbDb, 'spaces', entry.spaceId), entry.data)
         } else if (entry.type === 'MEMBER_JOIN') {
-          await setDoc(doc(fbDb, 'spaces', entry.spaceId, 'members', _user.uid), entry.data, { merge: true })
+          // @invariant joinedAt is built HERE, at drain time — never trust a joinedAt carried on
+          //   entry.data. A serverTimestamp() sentinel put in the outbox at enqueue time would
+          //   silently lose its Firestore-recognizable class identity crossing IndexedDB's
+          //   structured-clone boundary (see db.test.js "BLIND SPOT"), arriving here as inert
+          //   garbage instead of a real sentinel.
+          await setDoc(doc(fbDb, 'spaces', entry.spaceId, 'members', _user.uid), { ...entry.data, joinedAt: serverTimestamp() }, { merge: true })
         } else if (entry.type === 'USER_SPACE_LINK') {
           await setDoc(doc(fbDb, 'users', _user.uid, 'spaces', entry.spaceId), { at: serverTimestamp() }, { merge: true })
         } else {

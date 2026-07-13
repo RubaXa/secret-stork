@@ -352,6 +352,34 @@ describe('dbAddOutbox', () => {
     expect(all.map(e => e.type)).toEqual(['first', 'second'])
     expect(all.every(e => e.attempts === 0)).toBe(true)
   })
+
+  it('BLIND SPOT: a Firestore FieldValue-style sentinel loses its class identity on the IDB round-trip', async () => {
+    // Firestore's serverTimestamp() returns a class instance (a "sentinel"), not a plain value —
+    // the SDK recognizes it internally via `instanceof`/prototype checks before serializing a write.
+    // IndexedDB persists entries via the structured-clone algorithm, which does NOT preserve custom
+    // prototypes: a class instance survives the round-trip as a plain object with the same OWN
+    // properties, but loses its constructor/prototype chain entirely (no throw — silent).
+    // Concretely: enqueuing `{ joinedAt: serverTimestamp() }` in the outbox, then reading it back
+    // at drain time, hands Firestore a stripped plain object instead of the real sentinel — Firestore
+    // no longer recognizes it as "write the server time" and either rejects the write or stores
+    // garbage. This is why MEMBER_JOIN's serverTimestamp() must be constructed AT DRAIN TIME
+    // (see sync.js), never stored in the outbox payload itself.
+    class FakeServerTimestampSentinel {
+      constructor() { this._methodName = 'serverTimestamp' }
+      isEqual(other) { return other instanceof FakeServerTimestampSentinel }
+    }
+    const sentinel = new FakeServerTimestampSentinel()
+    expect(sentinel instanceof FakeServerTimestampSentinel).toBe(true) // sanity: true before the round-trip
+
+    const { getDB, dbAddOutbox } = await loadDb()
+    await dbAddOutbox({ type: 'MEMBER_JOIN', spaceId: 'space1', data: { joinedAt: sentinel } })
+    const db = await getDB()
+    const [stored] = await db.getAll('outbox')
+
+    expect(stored.data.joinedAt instanceof FakeServerTimestampSentinel).toBe(false) // identity lost
+    expect(stored.data.joinedAt.isEqual).toBeUndefined() // methods gone too — Firestore can't recognize it
+    expect(stored.data.joinedAt).toEqual({ _methodName: 'serverTimestamp' }) // only own data properties survive
+  })
 })
 
 describe('v4 migration — votes store cleared', () => {

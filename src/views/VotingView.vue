@@ -136,7 +136,7 @@ import { drain } from '@/composables/useSync.js'
 import { dbGetSpace, dbSaveSpace, dbGetVotes, dbGetVotesOrdered, dbSaveVote, dbAddOutbox, dbDeleteVote } from '@/services/db.js'
 import { loadNames, getNamesByGroups } from '@/services/names.js'
 import { RATINGS, CARD_BG, shuffle, genId } from '@/utils.js'
-import { fbDb, doc, getDoc, setDoc, serverTimestamp } from '@/firebase/config.js'
+import { fbDb, doc, getDoc, setDoc } from '@/firebase/config.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -221,9 +221,12 @@ onMounted(async () => {
         if (!sp.joinedUids) sp.joinedUids = []
         if (!sp.joinedUids.includes(user.value.uid)) sp.joinedUids.push(user.value.uid)
         await dbSaveSpace(sp)
+        // @invariant No serverTimestamp() sentinel goes into this payload — it would be persisted to
+        //   IndexedDB (structured clone) and silently lose its Firestore-recognizable class identity
+        //   before drain ever reads it back. sync.js constructs joinedAt fresh at drain time instead.
         await dbAddOutbox({
           type: 'MEMBER_JOIN', spaceId, uid: user.value.uid,
-          data: { displayName: user.value.displayName, photoURL: user.value.photoURL, joinedAt: serverTimestamp(), progress: 0 },
+          data: { displayName: user.value.displayName, photoURL: user.value.photoURL, progress: 0 },
         })
         await dbAddOutbox({ type: 'USER_SPACE_LINK', spaceId, uid: user.value.uid })
         drain()

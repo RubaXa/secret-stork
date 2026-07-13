@@ -269,7 +269,7 @@ describe('drainOutbox — mixed / other event types', () => {
     expect(updateDoc.mock.calls[0][1]).toEqual(data)
   })
 
-  it('MEMBER_JOIN → setDoc on spaces/{id}/members/{uid} with merge:true', async () => {
+  it('MEMBER_JOIN → setDoc on spaces/{id}/members/{uid} with merge:true, joinedAt added fresh', async () => {
     setSyncUser({ uid: UID })
     const data = { name: 'Kostya' }
     await dbAddOutbox({ type: 'MEMBER_JOIN', spaceId: 'mj-1', data })
@@ -279,8 +279,31 @@ describe('drainOutbox — mixed / other event types', () => {
     expect(setDoc).toHaveBeenCalledTimes(1)
     const call = setDoc.mock.calls[0]
     expect(call[0].__path).toBe(`spaces/mj-1/members/${UID}`)
-    expect(call[1]).toEqual(data)
+    expect(call[1]).toEqual({ ...data, joinedAt: '__ts__' }) // joinedAt always built at drain time
     expect(call[2]).toEqual({ merge: true })
+  })
+
+  it('MEMBER_JOIN builds joinedAt fresh at DRAIN TIME — never trusts a joinedAt value from the outbox', async () => {
+    // A real Firestore serverTimestamp() sentinel is a class instance; IndexedDB's structured-clone
+    // strips its prototype silently (see db.test.js "BLIND SPOT"), so whatever the outbox entry
+    // carries for joinedAt could already be corrupted garbage by the time drain reads it back.
+    // The fix: sync.js must construct serverTimestamp() itself at drain time (mirroring how VOTE's
+    // updatedAt and USER_SPACE_LINK's `at` are already built fresh here, never carried in the entry),
+    // and ignore/overwrite anything under entry.data.joinedAt.
+    setSyncUser({ uid: UID })
+    const corruptedSentinel = { _methodName: 'serverTimestamp' } // what a real sentinel looks like post-IDB-clone
+    await dbAddOutbox({
+      type: 'MEMBER_JOIN', spaceId: 'mj-fresh', uid: UID,
+      data: { displayName: 'X', joinedAt: corruptedSentinel },
+    })
+
+    await drainOutbox()
+
+    expect(setDoc).toHaveBeenCalledTimes(1)
+    const [, payload] = setDoc.mock.calls[0]
+    expect(payload.joinedAt).toBe('__ts__') // fresh sentinel from drain time
+    expect(payload.joinedAt).not.toBe(corruptedSentinel)
+    expect(payload.displayName).toBe('X') // rest of the payload preserved
   })
 
   it('USER_SPACE_LINK → setDoc on users/{uid}/spaces/{id} with {at: serverTimestamp} merge:true', async () => {
