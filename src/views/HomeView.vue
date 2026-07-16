@@ -1,20 +1,9 @@
 <!--
   @file: Home page — space list + create flow.
-  Uses an inline <nav> instead of <NavBar> component: home has a unique tab-bar nav and doesn't need
-  backPath or SyncDot, so reusing NavBar would require extra prop-drilling for no benefit.
+  Uses <NavBar> with a static title and default props (no backPath — this is the root screen).
 -->
 <template>
-  <nav class="nav">
-      <div class="nav-left"><span class="nav-title">✨ Назовём</span></div>
-      <div class="nav-right">
-        <button class="debug-btn" @click="copyLogs" title="Копировать логи">🐞</button>
-        <SyncDot />
-        <div v-if="user" class="nav-avatar" @click="onAvatarClick" :title="user.displayName || ''">
-          <img v-if="user.photoURL" :src="user.photoURL" alt="">
-          <template v-else>{{ avatarInitials }}</template>
-        </div>
-      </div>
-    </nav>
+  <NavBar title="✨ Назовём" />
 
     <div class="home-view view">
       <button class="home-create" @click="router.push('/new-space')">
@@ -80,14 +69,10 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import SyncDot from '@/components/SyncDot.vue'
+import NavBar from '@/components/NavBar.vue'
 import { currentUser } from '@/composables/useAuth.js'
 import { syncHome, drain } from '@/composables/useSync.js'
 import { dbGetMySpaces } from '@/services/db.js'
-import { signOut } from '@/services/auth.js'
-import { LOG_BUFFER } from '@/services/logger.js'
-import { toast } from '@/composables/useToast.js'
-import { initials } from '@/utils.js'
 import { loadNames as _loadNames } from '@/services/names.js'
 
 const router = useRouter()
@@ -96,7 +81,6 @@ const tab = ref('participating')
 const spaces = ref([])
 let _syncInterval = null
 
-const avatarInitials = computed(() => initials(user.value?.displayName))
 const mySpaces = computed(() => spaces.value.filter(s => s.creatorUid === user.value?.uid))
 // @invariant Mutually exclusive with mySpaces — a space you created shows under "Мои голосования"
 //   only, never doubled up under "Участвую" too. spaces.value itself (from dbGetMySpaces) is the
@@ -132,19 +116,4 @@ onMounted(async () => {
 onUnmounted(() => {
   clearInterval(_syncInterval)
 })
-
-async function copyLogs() {
-  try {
-    await navigator.clipboard.writeText(LOG_BUFFER.join('\n'))
-    toast(`Логи скопированы (${LOG_BUFFER.length})`, 'ok')
-  } catch (_) {
-    toast('Clipboard недоступен', 'error')
-  }
-}
-
-function onAvatarClick() {
-  if (confirm(`Выйти из аккаунта?\n${user.value?.displayName || user.value?.email}`)) {
-    signOut().then(() => router.push('/'))
-  }
-}
 </script>
