@@ -133,10 +133,10 @@ import { useRoute, useRouter, RouterLink } from 'vue-router'
 import NavBar from '@/components/NavBar.vue'
 import { currentUser } from '@/composables/useAuth.js'
 import { drain } from '@/composables/useSync.js'
-import { dbGetSpace, dbSaveSpace, dbGetVotes, dbGetVotesOrdered, dbSaveVote, dbAddOutbox, dbDeleteVote } from '@/services/db.js'
+import { dbGetSpace, dbSaveSpace, dbGetVotes, dbGetVotesOrdered, dbSaveVote, dbAddOutbox } from '@/services/db.js'
 import { loadNames, getNamesByGroups } from '@/services/names.js'
-import { RATINGS, CARD_BG, shuffle, genId } from '@/utils.js'
-import { fbDb, doc, getDoc, setDoc } from '@/firebase/config.js'
+import { RATINGS, CARD_BG, shuffle } from '@/utils.js'
+import { fbDb, doc, getDoc } from '@/firebase/config.js'
 
 const route = useRoute()
 const router = useRouter()
