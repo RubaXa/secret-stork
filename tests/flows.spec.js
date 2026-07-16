@@ -174,8 +174,10 @@ test.describe('History', () => {
 // ─── Home tabs ────────────────────────────────────────────────────────────────
 
 test.describe('Home tabs', () => {
-  test('created space appears; "Мои голосования" filters to owned; card routing differs', async ({ page }) => {
-    // Create an owned space.
+  // @invariant "Участвую" and "Мои голосования" are mutually exclusive: a space you created shows
+  //   under "Мои голосования" ONLY, never doubled up under "Участвую" too (that was a real bug —
+  //   participatingSpaces used to be the full unfiltered list, including your own creations).
+  test('a created (owned) space shows under "Мои голосования" only, not "Участвую"; mine-card routes to /admin', async ({ page }) => {
     await page.goto(appUrl())
     await page.waitForSelector('.home-create')
     await page.locator('.home-create').click()
@@ -184,27 +186,25 @@ test.describe('Home tabs', () => {
     await page.waitForURL(/.*#\/space\//)
     const spaceId = await getSpaceId(page)
 
-    // Back home — space is listed under "Участвую" (default tab).
+    // Back home, default tab is "Участвую" — the space you just CREATED must NOT be here.
     await page.goto(appUrl())
-    await page.waitForSelector('.space-card')
-    await expect(page.locator('.space-card-name', { hasText: 'Home Tab Space' })).toBeVisible()
+    await page.waitForSelector('.home-tabs')
+    await expect(page.locator('.space-card-name', { hasText: 'Home Tab Space' })).toHaveCount(0)
 
-    // "Мои голосования" tab: owned spaces show the 👑 Автор badge is NOT here (that's participating);
-    // the mine tab lists the same owned space (creatorUid === user).
+    // "Мои голосования" tab: the owned space DOES show here, and a mine-card routes to /admin.
     await page.locator('.home-tab', { hasText: 'Мои голосования' }).click()
     await expect(page.locator('.space-card-name', { hasText: 'Home Tab Space' })).toBeVisible()
-    // A mine-card routes to /admin.
     await page.locator('.space-card', { hasText: 'Home Tab Space' }).first().click()
     await page.waitForURL(new RegExp(`#/space/${spaceId}/admin$`))
     await page.waitForSelector('.admin-view')
 
-    // Back home, participating tab: clicking the card routes to voting (no /admin suffix).
-    await page.goto(appUrl())
-    await page.waitForSelector('.space-card')
-    await page.locator('.home-tab', { hasText: 'Участвую' }).click()
-    await page.locator('.space-card', { hasText: 'Home Tab Space' }).first().click()
-    await page.waitForURL(new RegExp(`#/space/${spaceId}$`))
-    await expect(page.locator('.voting-view, .done-view')).toHaveCount(1)
+    // NOTE: "a genuinely joined-but-not-owned space routes to voting from Участвую" is not covered
+    // here — this harness has no way to produce one. Joining requires either (a) the space already
+    // being absent from local IDB, which is false for a second fake user sharing the same browser
+    // storage as the creator, or (b) a real Firestore round-trip, which the fake E2E auth can't
+    // perform (unauthenticated writes/reads are rejected by the security rules). The template's
+    // routing logic for that branch (@click pushes `/space/:id`, no `/admin` suffix) is identical
+    // code to the already-covered mine-card branch, just a different target — not a fix target here.
   })
 })
 

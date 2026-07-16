@@ -126,8 +126,10 @@ test.describe('Create Space', () => {
     await page.locator('#btn-create').click()
     await page.waitForURL(/.*#\/space\//)
 
-    // Go back to home
+    // Go back to home. A created (owned) space shows under "Мои голосования", not the default
+    // "Участвую" tab — see tests/flows.spec.js "Home tabs" for that mutual-exclusivity invariant.
     await page.locator('.nav-back').click()
+    await page.locator('.home-tab', { hasText: 'Мои голосования' }).click()
     await page.waitForSelector('.space-card')
     await expect(page.locator('.space-card-name').first()).toHaveText('My Baby Space')
     await page.screenshot({ path: 'tests/screenshots/06_home_with_space.png' })

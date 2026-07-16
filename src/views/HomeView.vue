@@ -98,7 +98,10 @@ let _syncInterval = null
 
 const avatarInitials = computed(() => initials(user.value?.displayName))
 const mySpaces = computed(() => spaces.value.filter(s => s.creatorUid === user.value?.uid))
-const participatingSpaces = computed(() => spaces.value)
+// @invariant Mutually exclusive with mySpaces — a space you created shows under "Мои голосования"
+//   only, never doubled up under "Участвую" too. spaces.value itself (from dbGetMySpaces) is the
+//   union of created-by-me and joined-by-me, so this excludes your own to get the true complement.
+const participatingSpaces = computed(() => spaces.value.filter(s => s.creatorUid !== user.value?.uid))
 const shownSpaces = computed(() => tab.value === 'mine' ? mySpaces.value : participatingSpaces.value)
 const emptyText = computed(() =>
   tab.value === 'mine'
