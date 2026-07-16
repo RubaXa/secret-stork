@@ -80,8 +80,8 @@
                   <template v-for="uid in participants" :key="'n'+uid">
                     <div class="lik-seg"
                       :class="{ 'lik-empty': !(allVotes[uid]?.[item.name] <= 2 && allVotes[uid]?.[item.name]) }"
-                      :style="{ width: (100/participants.length)+'%', background: (allVotes[uid]?.[item.name] <= 2 && allVotes[uid]?.[item.name]) ? RATING_COLORS[allVotes[uid][item.name]-1] : undefined }"
-                      :title="allVotes[uid]?.[item.name] ? (uid===user?.uid?'Вы':'Участник')+': '+RATINGS[allVotes[uid][item.name]-1].label : ''" />
+                      :style="{ width: (100/participants.length)+'%', background: (allVotes[uid]?.[item.name] <= 2 && allVotes[uid]?.[item.name]) ? ratingColor(allVotes[uid][item.name]) : undefined }"
+                      :title="allVotes[uid]?.[item.name] ? (uid===user?.uid?'Вы':'Участник')+': '+rating(allVotes[uid][item.name]).label : ''" />
                   </template>
                 </div>
                 <div class="lik-center"></div>
@@ -89,8 +89,8 @@
                   <template v-for="uid in participants" :key="'p'+uid">
                     <div class="lik-seg"
                       :class="{ 'lik-empty': !(allVotes[uid]?.[item.name] >= 3) }"
-                      :style="{ width: (100/participants.length)+'%', background: allVotes[uid]?.[item.name] >= 3 ? RATING_COLORS[allVotes[uid][item.name]-1] : undefined }"
-                      :title="allVotes[uid]?.[item.name] ? (uid===user?.uid?'Вы':'Участник')+': '+RATINGS[allVotes[uid][item.name]-1].label : ''" />
+                      :style="{ width: (100/participants.length)+'%', background: allVotes[uid]?.[item.name] >= 3 ? ratingColor(allVotes[uid][item.name]) : undefined }"
+                      :title="allVotes[uid]?.[item.name] ? (uid===user?.uid?'Вы':'Участник')+': '+rating(allVotes[uid][item.name]).label : ''" />
                   </template>
                 </div>
               </div>
@@ -120,8 +120,8 @@
                   <td class="heat-td-name">{{ item.name }}<span v-if="item.origin" class="heat-origin"> · {{ item.origin }}</span></td>
                   <td v-for="uid in participants" :key="uid" class="heat-td-cell">
                     <div v-if="allVotes[uid]?.[item.name]" class="heat-cell"
-                      :style="{ background: RATING_COLORS[allVotes[uid][item.name]-1] }">
-                      {{ RATINGS[allVotes[uid][item.name]-1].emoji }}
+                      :style="{ background: ratingColor(allVotes[uid][item.name]) }">
+                      {{ rating(allVotes[uid][item.name]).emoji }}
                     </div>
                     <div v-else class="heat-cell heat-cell-empty">—</div>
                   </td>
@@ -158,7 +158,7 @@
                     background: PTCOLS[j % PTCOLS.length],
                     top: (2 + j * 5) + 'px',
                   }"
-                  :title="allVotes[uid]?.[item.name] ? (uid===user?.uid?'Вы':'Участник')+': '+RATINGS[allVotes[uid][item.name]-1].label : '—'" />
+                  :title="allVotes[uid]?.[item.name] ? (uid===user?.uid?'Вы':'Участник')+': '+rating(allVotes[uid][item.name]).label : '—'" />
               </div>
             </div>
             <div class="strip-score">
@@ -175,7 +175,7 @@
           <div class="bd-title">{{ bd.uid === user?.uid ? '👤 Вы' : 'Участник' }}</div>
           <div v-for="([name, score]) in bd.votes" :key="name" class="bd-row">
             <span style="font-size:14px;font-weight:500">{{ name }}</span>
-            <span style="font-size:18px">{{ RATINGS[clampScore(score) - 1].emoji }}</span>
+            <span style="font-size:18px">{{ rating(score).emoji }}</span>
           </div>
           <div v-if="!bd.votes.length" style="font-size:13px;color:var(--t2)">Нет понравившихся имён</div>
         </div>
@@ -219,6 +219,19 @@ import { toast } from '@/composables/useToast.js'
 
 // @purpose Fixed color palette for participant dots in strip view (cycled by participant index).
 const PTCOLS = ['#7c5cbf', '#1a9e8f', '#c05a2a', '#2980b9', '#8e44ad']
+
+// @invariant ALL vote→emoji/label/color lookups in this view MUST go through rating()/ratingColor(),
+//   never raw RATINGS[score-1]/RATING_COLORS[score-1]. Confirmed experimentally: allVotes comes from
+//   Firestore (another client, possibly an older/buggy version, or a manually edited doc) — a stored
+//   score of 6 crashed the ENTIRE results page for every viewer with "Cannot read properties of
+//   undefined (reading 'label')", because index 5 is out of range for a 5-entry array. clampScore
+//   makes any corrupt/out-of-range value fall back to the nearest valid rating instead of crashing.
+function rating(score) {
+  return RATINGS[clampScore(score) - 1]
+}
+function ratingColor(score) {
+  return RATING_COLORS[clampScore(score) - 1]
+}
 
 const route = useRoute()
 const router = useRouter()
