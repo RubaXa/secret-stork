@@ -47,7 +47,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, toRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import NavBar from '@/components/NavBar.vue'
 import { currentUser } from '@/composables/useAuth.js'
@@ -88,30 +88,49 @@ onMounted(async () => {
   if (!space.value) { router.replace('/'); return }
   if (space.value.creatorUid !== user.value?.uid) { toast('Нет доступа', 'error'); router.replace('/'); return }
 
-  if (!getE2EUser()) try {
-    const membersSnap = await getDocs(collection(fbDb, 'spaces', spaceId, 'members'))
-    const votesSnap = await getDocs(collection(fbDb, 'spaces', spaceId, 'votes'))
+  if (!getE2EUser()) {
+    // @invariant This try/catch covers ONLY the read the organizer actually cares about (members +
+    //   votes). Only a failure HERE sets loadError — see the separate cache-stat block below for why.
+    try {
+      const membersSnap = await getDocs(collection(fbDb, 'spaces', spaceId, 'members'))
+      const votesSnap = await getDocs(collection(fbDb, 'spaces', spaceId, 'votes'))
 
-    const pm = {}
-    votesSnap.docs.forEach(d => { pm[d.id] = Object.keys(d.data().votes || {}).length })
-    progressMap.value = pm
+      const pm = {}
+      votesSnap.docs.forEach(d => { pm[d.id] = Object.keys(d.data().votes || {}).length })
+      progressMap.value = pm
 
-    const list = membersSnap.docs.map(d => ({ uid: d.id, ...d.data() }))
-    if (!list.some(m => m.uid === space.value.creatorUid)) {
-      list.unshift({ uid: space.value.creatorUid, displayName: space.value.creatorName || 'Организатор' })
+      const list = membersSnap.docs.map(d => ({ uid: d.id, ...d.data() }))
+      if (!list.some(m => m.uid === space.value.creatorUid)) {
+        list.unshift({ uid: space.value.creatorUid, displayName: space.value.creatorName || 'Организатор' })
+      }
+      members.value = list
+    } catch (e) {
+      loadError.value = true
+      L('admin#members', 'load error', e.message)
     }
-    members.value = list
 
-    // Cache stats
-    space.value._memberCount = list.length
-    const total = totalNames.value || 243
-    space.value._avgProgress = list.length > 0
-      ? (list.reduce((s, m) => s + (pm[m.uid] || 0), 0) / list.length / total) * 100
-      : 0
-    await dbSaveSpace(space.value)
-  } catch (e) {
-    loadError.value = true
-    L('admin#members', 'load error', e.message)
+    // @invariant Best-effort cache write for HomeView's "👥 N / 📊 %" badges — deliberately a
+    //   SEPARATE try/catch from the read above. Two real bugs shipped together here before this fix:
+    //   (1) space.value is a Vue reactive Proxy (from `ref()` wrapping the plain object dbGetSpace
+    //   returned); IndexedDB's structured-clone algorithm cannot clone a Proxy, so this write threw
+    //   "DataCloneError: ... could not be cloned" on every single admin-panel visit. toRaw() unwraps
+    //   it to the plain underlying object IndexedDB can actually store.
+    //   (2) That exception was caught by the SAME catch block as the read above, which (after the
+    //   read had already succeeded and rendered the correct participant list) set loadError=true —
+    //   showing a false "не удалось загрузить участников" alarm UNDER a perfectly correct list.
+    //   Failing to cache a stat for a DIFFERENT screen must never imply "couldn't load participants".
+    if (!loadError.value) {
+      try {
+        space.value._memberCount = members.value.length
+        const total = totalNames.value || 243
+        space.value._avgProgress = members.value.length > 0
+          ? (members.value.reduce((s, m) => s + (progressMap.value[m.uid] || 0), 0) / members.value.length / total) * 100
+          : 0
+        await dbSaveSpace(toRaw(space.value))
+      } catch (e) {
+        L('admin#cacheStats', 'save error', e.message) // best-effort — never surfaced to the user
+      }
+    }
   }
   loadingMembers.value = false
 })
