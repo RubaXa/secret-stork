@@ -174,10 +174,11 @@ test.describe('History', () => {
 // ─── Home tabs ────────────────────────────────────────────────────────────────
 
 test.describe('Home tabs', () => {
-  // @invariant "Участвую" and "Мои голосования" are mutually exclusive: a space you created shows
-  //   under "Мои голосования" ONLY, never doubled up under "Участвую" too (that was a real bug —
-  //   participatingSpaces used to be the full unfiltered list, including your own creations).
-  test('a created (owned) space shows under "Мои голосования" only, not "Участвую"; mine-card routes to /admin', async ({ page }) => {
+  // @invariant "Участвую" reflects VOTING ENGAGEMENT (_progress > 0), NOT "not the creator". A
+  //   space you created but haven't voted in yet correctly stays absent from "Участвую" — this test
+  //   locks that. See the next test for the complementary, previously-broken case: creator AND
+  //   voter (the common case — an organizer who also votes in their own poll) must show under BOTH.
+  test('a created-but-not-yet-voted-in space shows under "Мои голосования" only, not "Участвую"; mine-card routes to /admin', async ({ page }) => {
     await page.goto(appUrl())
     await page.waitForSelector('.home-create')
     await page.locator('.home-create').click()
@@ -186,7 +187,7 @@ test.describe('Home tabs', () => {
     await page.waitForURL(/.*#\/space\//)
     const spaceId = await getSpaceId(page)
 
-    // Back home, default tab is "Участвую" — the space you just CREATED must NOT be here.
+    // Back home, default tab is "Участвую" — the space you just CREATED (no votes cast yet) must NOT be here.
     await page.goto(appUrl())
     await page.waitForSelector('.home-tabs')
     await expect(page.locator('.space-card-name', { hasText: 'Home Tab Space' })).toHaveCount(0)
@@ -205,6 +206,34 @@ test.describe('Home tabs', () => {
     // perform (unauthenticated writes/reads are rejected by the security rules). The template's
     // routing logic for that branch (@click pushes `/space/:id`, no `/admin` suffix) is identical
     // code to the already-covered mine-card branch, just a different target — not a fix target here.
+  })
+
+  // REGRESSION: reported live by the organizer — they created a space, voted 188/188 in it
+  // themselves, and it vanished from "Участвую" entirely (an earlier "fix" wrongly excluded EVERY
+  // space where creatorUid === me, treating "creator" and "voter" as mutually exclusive — they
+  // aren't; an organizer voting in their own poll is the common case, not an edge case).
+  test('a created-AND-voted-in space shows under BOTH "Участвую" and "Мои голосования"', async ({ page }) => {
+    await page.goto(appUrl())
+    await page.waitForSelector('.home-create')
+    await page.locator('.home-create').click()
+    await page.locator('#inp-title').fill('Organizer Also Votes')
+    await page.locator('#btn-create').click()
+    await page.waitForURL(/.*#\/space\//)
+
+    // Cast one vote as the creator.
+    await page.waitForSelector('.card-current .card-name')
+    await page.locator('.r-btn').nth(4).click()
+    await page.waitForTimeout(500)
+
+    await page.goto(appUrl())
+    await page.waitForSelector('.home-tabs')
+
+    // Default tab is "Участвую" — the space I created AND voted in MUST show here now.
+    await expect(page.locator('.space-card-name', { hasText: 'Organizer Also Votes' })).toBeVisible()
+
+    // It must ALSO still show under "Мои голосования" — the two tabs are not mutually exclusive.
+    await page.locator('.home-tab', { hasText: 'Мои голосования' }).click()
+    await expect(page.locator('.space-card-name', { hasText: 'Organizer Also Votes' })).toBeVisible()
   })
 })
 

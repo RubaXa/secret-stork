@@ -82,10 +82,13 @@ const spaces = ref([])
 let _syncInterval = null
 
 const mySpaces = computed(() => spaces.value.filter(s => s.creatorUid === user.value?.uid))
-// @invariant Mutually exclusive with mySpaces — a space you created shows under "Мои голосования"
-//   only, never doubled up under "Участвую" too. spaces.value itself (from dbGetMySpaces) is the
-//   union of created-by-me and joined-by-me, so this excludes your own to get the true complement.
-const participatingSpaces = computed(() => spaces.value.filter(s => s.creatorUid !== user.value?.uid))
+// @invariant "Участвую" reflects whether I have actually cast a vote in a space (_progress > 0) —
+//   NOT whether I created it. Creator and voter are NOT mutually exclusive roles: an organizer who
+//   also votes in their own poll (the common case) must see that space under BOTH tabs. A space I
+//   merely created but haven't voted in yet correctly stays absent from here (see "Мои голосования"
+//   for that). _progress is set the instant a vote is cast (VotingView.vue saveVote), regardless of
+//   whether the voter is the creator or an invited participant.
+const participatingSpaces = computed(() => spaces.value.filter(s => (s._progress || 0) > 0))
 const shownSpaces = computed(() => tab.value === 'mine' ? mySpaces.value : participatingSpaces.value)
 const emptyText = computed(() =>
   tab.value === 'mine'
