@@ -72,23 +72,34 @@ import { useRouter } from 'vue-router'
 import NavBar from '@/components/NavBar.vue'
 import { currentUser } from '@/composables/useAuth.js'
 import { syncHome, drain } from '@/composables/useSync.js'
-import { dbGetMySpaces } from '@/services/db.js'
+import { dbGetMySpaces, dbGetVotes } from '@/services/db.js'
 import { loadNames as _loadNames } from '@/services/names.js'
 
 const router = useRouter()
 const user = currentUser
 const tab = ref('participating')
 const spaces = ref([])
+// @purpose { [spaceId]: boolean } — does the CURRENT user have at least one REAL vote record for
+//   this space? Checked directly against the uid-scoped local votes store (dbGetVotes), not the
+//   cached `_progress` counter. That counter is written from multiple places (VotingView.vue on
+//   each vote, sync.js's background sync) and had already drifted from reality once this session —
+//   a presence check ("do I have a vote row") is the ground truth; a number comparison on a cache
+//   is a proxy for it that can go stale. Computed once per loadSpaces() call, not reactively derived
+//   from `spaces` itself, since the check is async (IndexedDB read per space).
+const hasVotedMap = ref({})
 let _syncInterval = null
 
 const mySpaces = computed(() => spaces.value.filter(s => s.creatorUid === user.value?.uid))
-// @invariant "Участвую" reflects whether I have actually cast a vote in a space (_progress > 0) —
-//   NOT whether I created it. Creator and voter are NOT mutually exclusive roles: an organizer who
-//   also votes in their own poll (the common case) must see that space under BOTH tabs. A space I
-//   merely created but haven't voted in yet correctly stays absent from here (see "Мои голосования"
-//   for that). _progress is set the instant a vote is cast (VotingView.vue saveVote), regardless of
-//   whether the voter is the creator or an invited participant.
-const participatingSpaces = computed(() => spaces.value.filter(s => (s._progress || 0) > 0))
+// @invariant "Участвую" reflects whether I have actually cast a vote in a space — NOT whether I
+//   created it. Creator and voter are NOT mutually exclusive roles: an organizer who also votes in
+//   their own poll (the common case) must see that space under BOTH tabs. A space I merely created
+//   but haven't voted in yet correctly stays absent from here (see "Мои голосования" for that).
+// @invariant Cross-device caveat: sync.js's background sync only refreshes the cached _progress
+//   NUMBER from Firestore — it does not hydrate real vote rows into the local votes store. So a
+//   vote cast on another device won't count here until this device's VotingView actually opens that
+//   space once (which merges the real Firestore vote rows into local IDB). Known, narrow trade-off
+//   for correctness on THIS device — flagged rather than silently accepted.
+const participatingSpaces = computed(() => spaces.value.filter(s => hasVotedMap.value[s.id]))
 const shownSpaces = computed(() => tab.value === 'mine' ? mySpaces.value : participatingSpaces.value)
 const emptyText = computed(() =>
   tab.value === 'mine'
@@ -100,6 +111,17 @@ async function loadSpaces() {
   if (!user.value) return
   const all = await dbGetMySpaces(user.value.uid)
   spaces.value = all.filter(s => !s.deleted)
+  await refreshHasVotedMap()
+}
+
+async function refreshHasVotedMap() {
+  const uid = user.value?.uid
+  if (!uid) return
+  const entries = await Promise.all(spaces.value.map(async s => {
+    const votes = await dbGetVotes(uid, s.id)
+    return [s.id, Object.keys(votes).length > 0]
+  }))
+  hasVotedMap.value = Object.fromEntries(entries)
 }
 
 async function runSync() {
