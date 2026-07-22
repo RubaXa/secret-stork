@@ -133,6 +133,7 @@ import { useRoute, useRouter, RouterLink } from 'vue-router'
 import NavBar from '@/components/NavBar.vue'
 import { currentUser } from '@/composables/useAuth.js'
 import { drain } from '@/composables/useSync.js'
+import { mergeVotesFromFirestore } from '@/services/sync.js'
 import { dbGetSpace, dbSaveSpace, dbGetVotes, dbGetVotesOrdered, dbSaveVote, dbAddOutbox } from '@/services/db.js'
 import { loadNames, getNamesByGroups } from '@/services/names.js'
 import { RATINGS, CARD_BG, shuffle } from '@/utils.js'
@@ -239,20 +240,13 @@ onMounted(async () => {
   // Load votes from IDB (scoped to this user)
   votes.value = await dbGetVotes(user.value.uid, spaceId)
 
-  // Merge from Firestore (cross-device)
+  // Merge from Firestore (cross-device) — shared with sync.js's background sync, see mergeVotesFromFirestore.
   try {
     const fsSnap = await getDoc(doc(fbDb, 'spaces', spaceId, 'votes', user.value.uid))
     if (fsSnap.exists()) {
-      const fsVotes = fsSnap.data().votes || {}
-      let added = 0
-      for (const [name, score] of Object.entries(fsVotes)) {
-        if (!(name in votes.value)) {
-          votes.value = { ...votes.value, [name]: score }
-          await dbSaveVote(user.value.uid, spaceId, name, score)
-          added++
-        }
-      }
+      const added = await mergeVotesFromFirestore(user.value.uid, spaceId, fsSnap.data().votes || {})
       if (added > 0) {
+        votes.value = await dbGetVotes(user.value.uid, spaceId) // re-read local state, now includes the merge
         const sp2 = await dbGetSpace(spaceId)
         if (sp2) { sp2._progress = Object.keys(votes.value).length; await dbSaveSpace(sp2) }
       }

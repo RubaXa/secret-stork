@@ -3,7 +3,7 @@
 
 import { L, safeUid } from './logger.js'
 import { fbDb, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, collection, serverTimestamp, query, where } from '@/firebase/config.js'
-import { dbGetSpace, dbSaveSpace, dbGetMySpaces, dbAddOutbox, getDB } from './db.js'
+import { dbGetSpace, dbSaveSpace, dbGetMySpaces, dbGetVotes, dbSaveVote, dbAddOutbox, getDB } from './db.js'
 
 let _user = null
 let _draining = false
@@ -14,6 +14,36 @@ let _draining = false
  */
 export function setSyncUser(user) {
   _user = user
+}
+
+/**
+ * @purpose Hydrate votes that exist remotely (Firestore) but not yet locally into the uid-scoped
+ *   local votes store. This is the single merge routine shared by VotingView.vue (on entering a
+ *   space) and syncSpacesFromFirestore's background sync (on the Home screen) — without it, "do I
+ *   have a vote for this space" (dbGetVotes) only reflects THIS device's own history, so a vote
+ *   cast elsewhere silently doesn't count anywhere on this device until the user happens to open
+ *   that exact space here. Duplicating this loop in two places was the bug: only VotingView.vue's
+ *   copy actually wrote real vote rows — the Home-sync copy tracked a display counter instead, so
+ *   "Участвую" (which checks for real vote rows) never noticed cross-device participation.
+ * @invariant Local-first: only ADDS a vote missing locally, never overwrites an existing local
+ *   value — the device that cast a vote is the freshest source for it until the outbox drains it
+ *   elsewhere.
+ * @param {string} uid
+ * @param {string} spaceId
+ * @param {Record<string, number>} fsVotes Remote vote map from Firestore's spaces/{id}/votes/{uid} doc.
+ * @returns {Promise<number>} Count of votes actually added to local IDB.
+ * @sideEffect IDB writes via dbSaveVote for each vote missing locally.
+ */
+export async function mergeVotesFromFirestore(uid, spaceId, fsVotes) {
+  const localVotes = await dbGetVotes(uid, spaceId)
+  let added = 0
+  for (const [name, score] of Object.entries(fsVotes)) {
+    if (!(name in localVotes)) {
+      await dbSaveVote(uid, spaceId, name, score)
+      added++
+    }
+  }
+  return added
 }
 
 /**
@@ -219,12 +249,17 @@ export async function syncSpacesFromFirestore(uid) {
       try {
         let changed = false
 
-        // own vote progress
+        // own vote progress — HYDRATE real vote rows locally (mergeVotesFromFirestore), not just a
+        // display count. HomeView's "Участвую" checks for actual local vote rows (dbGetVotes); a
+        // vote cast on another device must show up here without the user first opening this exact
+        // space on this device.
         const vSnap = await getDoc(doc(fbDb, 'spaces', space.id, 'votes', uid))
         if (vSnap.exists()) {
-          const count = Object.keys(vSnap.data().votes || {}).length
-          if (count !== (space._progress || 0)) { space._progress = count; changed = true }
+          await mergeVotesFromFirestore(uid, space.id, vSnap.data().votes || {})
         }
+        const localVotes = await dbGetVotes(uid, space.id)
+        const count = Object.keys(localVotes).length
+        if (count !== (space._progress || 0)) { space._progress = count; changed = true }
 
         // participant count — only the creator may list the members subcollection (Firestore rules),
         // and 👥 is only shown on their own cards. Count matches AdminView: members + creator-if-absent.

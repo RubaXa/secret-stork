@@ -35,6 +35,7 @@ import {
   setSyncUser,
   drainOutbox,
   syncSpacesFromFirestore,
+  mergeVotesFromFirestore,
   updateSpace,
   deleteSpace,
 } from '@/services/sync.js'
@@ -43,6 +44,8 @@ import {
   dbSaveSpace,
   dbGetSpace,
   dbGetMySpaces,
+  dbGetVotes,
+  dbSaveVote,
   getDB,
 } from '@/services/db.js'
 import {
@@ -585,6 +588,74 @@ describe('syncSpacesFromFirestore', () => {
     const s = await dbGetSpace('sp-joined')
     expect(s._progress).toBe(1)
     expect(s._memberCount).toBeUndefined()
+  })
+
+  // REGRESSION: reported live — "Участвую" checks for real local vote ROWS (dbGetVotes), but the
+  // background sync used to only cache a _progress NUMBER, never actually writing those rows into
+  // IDB. A vote cast on another device updated the counter but never appeared in the real votes
+  // store, so "what's the point of sync if it doesn't actually sync" (verbatim complaint). These
+  // tests assert the ACTUAL vote rows land locally, not just that a counter changes.
+  it('step 3 HYDRATES real vote rows into local IDB, not just the _progress counter', async () => {
+    await dbSaveSpace({ id: 'sp-hydrate', title: 'H', creatorUid: 'other', joinedUids: [UID], deleted: false, status: 'open', createdAt: 1 })
+
+    getDocs
+      .mockResolvedValueOnce(makeQuerySnap([])) // step1
+      .mockResolvedValueOnce(makeQuerySnap([])) // step2
+    getDoc.mockResolvedValue(makeDocSnap('sp-hydrate', { votes: { Alice: 5, Bob: 2 } }, true))
+
+    // Nothing voted locally yet — this device never opened this space.
+    expect(await dbGetVotes(UID, 'sp-hydrate')).toEqual({})
+
+    await syncSpacesFromFirestore(UID)
+
+    // The real vote rows now exist locally — this is what "Участвую" actually checks.
+    expect(await dbGetVotes(UID, 'sp-hydrate')).toEqual({ Alice: 5, Bob: 2 })
+  })
+
+  it('step 3 hydration does not clobber a fresher LOCAL-only vote not yet reflected in Firestore', async () => {
+    await dbSaveSpace({ id: 'sp-localfirst', title: 'L', creatorUid: 'other', joinedUids: [UID], deleted: false, status: 'open', createdAt: 1 })
+    await dbSaveVote(UID, 'sp-localfirst', 'Carol', 4) // cast locally, not yet drained to Firestore
+
+    getDocs
+      .mockResolvedValueOnce(makeQuerySnap([])) // step1
+      .mockResolvedValueOnce(makeQuerySnap([])) // step2
+    getDoc.mockResolvedValue(makeDocSnap('sp-localfirst', { votes: { Alice: 5 } }, true)) // remote doesn't know about Carol yet
+
+    await syncSpacesFromFirestore(UID)
+
+    const votes = await dbGetVotes(UID, 'sp-localfirst')
+    expect(votes).toEqual({ Alice: 5, Carol: 4 }) // remote merged in, local-only vote preserved
+    const s = await dbGetSpace('sp-localfirst')
+    expect(s._progress).toBe(2) // reflects the TRUE local set, not just the remote doc's count
+  })
+})
+
+// ============================================================================================
+describe('mergeVotesFromFirestore', () => {
+  it('adds remote votes missing locally', async () => {
+    const added = await mergeVotesFromFirestore(UID, 'mv-1', { Alice: 5, Bob: 3 })
+    expect(added).toBe(2)
+    expect(await dbGetVotes(UID, 'mv-1')).toEqual({ Alice: 5, Bob: 3 })
+  })
+
+  it('does not overwrite an existing local vote with the remote value', async () => {
+    await dbSaveVote(UID, 'mv-2', 'Alice', 1) // local says 1
+    const added = await mergeVotesFromFirestore(UID, 'mv-2', { Alice: 5 }) // remote says 5
+    expect(added).toBe(0)
+    expect((await dbGetVotes(UID, 'mv-2')).Alice).toBe(1) // local value wins, untouched
+  })
+
+  it('returns 0 and writes nothing when there is nothing new to merge', async () => {
+    await dbSaveVote(UID, 'mv-3', 'Alice', 5)
+    const added = await mergeVotesFromFirestore(UID, 'mv-3', { Alice: 5 })
+    expect(added).toBe(0)
+  })
+
+  it('is uid-scoped — merging for one uid never touches another uid\'s votes in the same space', async () => {
+    await mergeVotesFromFirestore(UID, 'mv-4', { Alice: 5 })
+    await mergeVotesFromFirestore('OTHER-UID', 'mv-4', { Alice: 1, Bob: 2 })
+    expect(await dbGetVotes(UID, 'mv-4')).toEqual({ Alice: 5 })
+    expect(await dbGetVotes('OTHER-UID', 'mv-4')).toEqual({ Alice: 1, Bob: 2 })
   })
 
   it('step isolation: a throwing getDocs in step 1 does NOT abort step 3', async () => {

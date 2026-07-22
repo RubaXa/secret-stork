@@ -94,11 +94,10 @@ const mySpaces = computed(() => spaces.value.filter(s => s.creatorUid === user.v
 //   created it. Creator and voter are NOT mutually exclusive roles: an organizer who also votes in
 //   their own poll (the common case) must see that space under BOTH tabs. A space I merely created
 //   but haven't voted in yet correctly stays absent from here (see "Мои голосования" for that).
-// @invariant Cross-device caveat: sync.js's background sync only refreshes the cached _progress
-//   NUMBER from Firestore — it does not hydrate real vote rows into the local votes store. So a
-//   vote cast on another device won't count here until this device's VotingView actually opens that
-//   space once (which merges the real Firestore vote rows into local IDB). Known, narrow trade-off
-//   for correctness on THIS device — flagged rather than silently accepted.
+// @invariant Cross-device: the 30s background sync (syncHome → syncSpacesFromFirestore) hydrates
+//   real remote vote rows into local IDB via sync.js's mergeVotesFromFirestore (the SAME routine
+//   VotingView.vue uses on entry) — so a vote cast on another device shows up here once background
+//   sync runs, without needing to open that specific space on this device first.
 const participatingSpaces = computed(() => spaces.value.filter(s => hasVotedMap.value[s.id]))
 const shownSpaces = computed(() => tab.value === 'mine' ? mySpaces.value : participatingSpaces.value)
 const emptyText = computed(() =>
